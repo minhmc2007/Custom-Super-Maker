@@ -44,12 +44,18 @@ assets/
 All run on `ubuntu-latest`. Dependencies installed via `apt` (erofs-utils,
 android-sdk-libsparse-utils, lz4, etc.).
 
-## OEM port gotcha (ErfanGSIs)
+## OEM port gotchas (ErfanGSIs)
 
-`url2GSI.sh` calls `update.sh` which resets the `Firmware_extractor` submodule
-(via `git submodule update`), **overwriting** any unlz4 patches. The fix in
-`oem_port.sh` appends a patching command to `update.sh` *after* the
-`git submodule update` line — do not remove or reorder this.
+1. **unlz4 patches**: `url2GSI.sh` calls `update.sh` which resets the
+   `Firmware_extractor` submodule (via `git submodule update`), **overwriting**
+   any unlz4 patches. The fix in `oem_port.sh` appends a patching command to
+   `update.sh` — do not remove or reorder this. The patch uses `-c` with
+   explicit redirect to avoid breaking the tarmd5 extraction branch.
+
+2. **EROFS firmware**: Newer Samsung firmware ships EROFS images which
+   ErfanGSIs can't mount+modify. A `convert_erofs_to_ext4.sh` helper is
+   created in the ErfanGSIs dir and called after `extractor.sh` completes
+   (via a `sed -i '/extractor.sh/a ...'` patch on `url2GSI.sh`).
 
 ## Output artifact attribution
 

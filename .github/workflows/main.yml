@@ -76,8 +76,8 @@ jobs:
 
     - name: Verify and Prepare Script
       run: |
-        if [ ! -f "./repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
-        chmod +x ./repacksuper.sh
+        if [ ! -f "./scripts/repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
+        chmod +x ./scripts/repacksuper.sh
         mkdir -p work
 
     - name: Download Base Firmware
@@ -287,7 +287,7 @@ jobs:
         if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
 
         echo "Running with flags: $FLAGS"
-        ./repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
+        ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
 
     - name: Create Tarball
       id: package

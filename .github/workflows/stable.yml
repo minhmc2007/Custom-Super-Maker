@@ -84,8 +84,8 @@ jobs:
         sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip gzip p7zip-full file wget curl megatools
     - name: Verify and Prepare Script
       run: |
-        if [ ! -f "./repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
-        chmod +x ./repacksuper.sh
+        if [ ! -f "./scripts/repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
+        chmod +x ./scripts/repacksuper.sh
     - name: Create working directory
       run: mkdir -p work
 
@@ -173,7 +173,7 @@ jobs:
     - name: Run repacksuper.sh
       run: |
         echo "==> Running repacksuper.sh with flags: ${{ steps.prepare_flags.outputs.flags }}"
-        ./repacksuper.sh ${{ steps.prepare_flags.outputs.flags }} work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
+        ./scripts/repacksuper.sh ${{ steps.prepare_flags.outputs.flags }} work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
         rm -f work/stock_super_sparse.img work/custom_system.img
     - name: Verify output and Create Tarball
       run: |

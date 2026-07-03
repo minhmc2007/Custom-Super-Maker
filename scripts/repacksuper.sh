@@ -3,10 +3,10 @@
 version=1.17.0
 
 script_dir=$(dirname $0)
-lptools_path="$script_dir/lpunpack_and_lpmake"
-heimdall_path="$script_dir/heimdall"
-empty_product_path="$script_dir/misc/product.img"
-empty_system_ext_path="$script_dir/misc/system_ext.img"
+lptools_path="$script_dir/../tools/lpunpack_and_lpmake"
+heimdall_path="$script_dir/../tools/heimdall"
+empty_product_path="$script_dir/../tools/misc/product.img"
+empty_system_ext_path="$script_dir/../tools/misc/system_ext.img"
 system_required="simg2img tar unxz lz4 unzip gzip jq file"
 
 # Colors

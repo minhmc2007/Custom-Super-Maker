@@ -4,7 +4,7 @@ version=1.16.1
 
 system_required="unzip tar file lz4"
 script_dir=$(dirname $0)
-heimdall_path="$script_dir"/heimdall
+heimdall_path="$script_dir"/../tools/heimdall
 
 # Colors
 if [ ! $NO_COLOR ] && [ $TERM != "dumb" ]; then

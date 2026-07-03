@@ -10,7 +10,14 @@
 #   5. Calculates the largest possible size for 'System' based on device limits.
 #
 # Usage:
-#   sudo ./repacksuper_lite.sh <Source_Super_Path> <Custom_System_Path> <Output_Path>
+#   sudo ./repacksuper_lite.sh <Source_Super_Path> <Custom_System_Path> <Output_Path> [Custom_Vendor_Image]
+#   sudo ./repacksuper_lite.sh -P <Patched_Dir> <Source_Super_Path> <Custom_System_Path> <Output_Path>
+#
+# Options:
+#   -P <Patched_Dir>  : Directory containing pre-patched partition images
+#                        (vendor.img, product.img, system_ext.img, odm.img).
+#                        These override the partitions extracted from the stock super.
+#   Custom_Vendor_Image (positional): Path to a single pre-patched vendor.img.
 #
 # Author: Minhmc2077 
 # License: GPL3
@@ -26,7 +33,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 script_dir=$(dirname $(readlink -f "$0"))
-lptools_path="$script_dir/lpunpack_and_lpmake"
+lptools_path="$script_dir/../tools/lpunpack_and_lpmake"
 
 # Define required system tools
 system_required="simg2img tar unxz lz4 unzip gzip jq file mkfs.erofs rsync stat"
@@ -67,12 +74,25 @@ bytes_to_human() {
 
 # --- 2. ARGUMENT PARSING ---
 
+patched_dir=""
+custom_vendor_img=""
+
+# Parse -P flag if present
+if [ "$1" = "-P" ]; then
+    patched_dir="$2"
+    shift 2
+fi
+
 src_input="$1"
 custom_system_img="$2"
 output_name="$3"
+# 4th positional arg still supported for backward compatibility
+if [ -z "$patched_dir" ] && [ -n "$4" ]; then
+    custom_vendor_img="$4"
+fi
 
 if [ -z "$src_input" ] || [ -z "$custom_system_img" ]; then
-    echo "Usage: sudo $0 <Source_Super> <Custom_System_Image> <Output_Filename>"
+    echo "Usage: sudo $0 [-P <Patched_Dir>] <Source_Super> <Custom_System_Image> <Output_Filename> [Custom_Vendor_Image]"
     exit 1
 fi
 if [ -z "$output_name" ]; then output_name="super_new.img"; fi
@@ -265,14 +285,44 @@ args="$args --group $group_name:$group_max_size"
 
 # Add Partitions (System gets max size, others get file size)
 args="$args --partition system:readonly:$new_system_part_size:$group_name --image system=$super_dir/system.img"
-args="$args --partition vendor:readonly:$new_vendor_size:$group_name --image vendor=$super_dir/vendor.img"
-args="$args --partition product:readonly:$new_product_size:$group_name --image product=$super_dir/product.img"
 
-if [ $odm_size -gt 0 ]; then
-    args="$args --partition odm:readonly:$odm_size:$group_name --image odm=$super_dir/odm.img"
+# Determine which vendor image to use (precedence: patched_dir > custom_vendor_img > extracted)
+vendor_src="$super_dir/vendor.img"
+if [ -n "$patched_dir" ] && [ -f "$patched_dir/vendor.img" ]; then
+    vendor_src="$patched_dir/vendor.img"
+    echo "--> Using patched vendor image from: $vendor_src"
+elif [ -n "$custom_vendor_img" ] && [ -f "$custom_vendor_img" ]; then
+    vendor_src="$custom_vendor_img"
+    echo "--> Using custom patched vendor image: $vendor_src"
 fi
+args="$args --partition vendor:readonly:$new_vendor_size:$group_name --image vendor=$vendor_src"
+
+# Determine which product image to use
+product_src="$super_dir/product.img"
+if [ -n "$patched_dir" ] && [ -f "$patched_dir/product.img" ]; then
+    product_src="$patched_dir/product.img"
+    echo "--> Using patched product image from: $product_src"
+fi
+args="$args --partition product:readonly:$new_product_size:$group_name --image product=$product_src"
+
+# Check for patched ODM
+odm_src="$super_dir/odm.img"
+if [ $odm_size -gt 0 ]; then
+    if [ -n "$patched_dir" ] && [ -f "$patched_dir/odm.img" ]; then
+        odm_src="$patched_dir/odm.img"
+        echo "--> Using patched odm image from: $odm_src"
+    fi
+    args="$args --partition odm:readonly:$odm_size:$group_name --image odm=$odm_src"
+fi
+
+# Check for patched system_ext
+sys_ext_src="$super_dir/system_ext.img"
 if [ $sys_ext_size -gt 0 ]; then
-    args="$args --partition system_ext:readonly:$sys_ext_size:$group_name --image system_ext=$super_dir/system_ext.img"
+    if [ -n "$patched_dir" ] && [ -f "$patched_dir/system_ext.img" ]; then
+        sys_ext_src="$patched_dir/system_ext.img"
+        echo "--> Using patched system_ext image from: $sys_ext_src"
+    fi
+    args="$args --partition system_ext:readonly:$sys_ext_size:$group_name --image system_ext=$sys_ext_src"
 fi
 
 args="$args --sparse --output $output_name"

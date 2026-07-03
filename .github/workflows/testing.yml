@@ -132,16 +132,16 @@ jobs:
         mkdir -p work
         
         # Ensure the repack script is executable
-        if [ -f "./repacksuper_lite.sh" ]; then
-          chmod +x ./repacksuper_lite.sh
+        if [ -f "./scripts/repacksuper_lite.sh" ]; then
+          chmod +x ./scripts/repacksuper_lite.sh
         else
-          echo "::error::repacksuper_lite.sh not found in repository root."
+          echo "::error::repacksuper_lite.sh not found in scripts/ directory."
           exit 1
         fi
         
         # Ensure the EROFS compress script is executable
-        if [ -f "./compress_system_img.sh" ]; then
-          chmod +x ./compress_system_img.sh
+        if [ -f "./scripts/compress_system_img.sh" ]; then
+          chmod +x ./scripts/compress_system_img.sh
         fi
 
     # --------------------------------------------------------------------------
@@ -203,130 +203,25 @@ jobs:
     - name: Generate Custom System (Porting Mode)
       if: github.event.inputs.enable_oem_port == 'true'
       run: |
-        echo "==> Porting Mode Enabled."
-        
-        # 1. Acquire Port Firmware Zip
+        chmod +x ./scripts/oem_port.sh
+
+        PORT_ARGS=()
+        PORT_ARGS+=("work" "${{ github.event.inputs.porting_tool }}" "${{ github.event.inputs.port_rom_type }}")
+
         if [ -n "${{ github.event.inputs.port_firmware_url }}" ]; then
-          echo "==> Downloading Port Firmware via URL..."
-          wget -q --content-disposition -O work/port_firmware.zip "${{ github.event.inputs.port_firmware_url }}"
+          PORT_ARGS+=(--url "${{ github.event.inputs.port_firmware_url }}")
         else
-          echo "==> Fetching Port Firmware via Samloader..."
-          PORT_MODEL="${{ github.event.inputs.port_model }}"
-          PORT_CSC="${{ github.event.inputs.port_csc }}"
-          PORT_IMEI="${{ github.event.inputs.port_imei }}"
-          
-          if [ -z "$PORT_MODEL" ] || [ -z "$PORT_CSC" ] || [ -z "$PORT_IMEI" ]; then
-            echo "::error::Both Porting URL and Samloader parameters (Model, CSC, IMEI) are missing."
-            exit 1
-          fi
-          
-          mkdir -p port_fw && cd port_fw
-          echo "==> Checking Port Firmware Version..."
-          VERSION_PORT=$(python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" checkupdate 2>/dev/null)
-          if [ -z "$VERSION_PORT" ]; then
-            echo "::error::Failed to fetch version for Port Model: $PORT_MODEL ($PORT_CSC). Check model, CSC, or IMEI."
-            exit 1
-          fi
-          echo "Port Firmware Version: $VERSION_PORT"
-          
-          echo "==> Downloading Port Firmware..."
-          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -O .
-          
-          echo "==> Checking downloaded files..."
-          ls -la
-          
-          # Auto-detect whether samloader downloaded an encrypted file or decrypted it on-the-fly
-          ENC_FILE_PORT=$(find . -maxdepth 1 -name "*.enc*" | head -n1)
-          if [ -n "$ENC_FILE_PORT" ]; then
-            echo "==> Found encrypted port file: $ENC_FILE_PORT. Decrypting manually..."
-            python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i "$ENC_FILE_PORT" -o port_firmware.zip
-            rm -f "$ENC_FILE_PORT"
-          else
-            echo "==> No encrypted port file found. Checking for on-the-fly decrypted ZIP..."
-            ZIP_FILE_PORT=$(find . -maxdepth 1 -name "*.zip" ! -name "port_firmware.zip" | head -n1)
-            if [ -n "$ZIP_FILE_PORT" ]; then
-              echo "==> Found decrypted ZIP file: $ZIP_FILE_PORT. Preparing..."
-              mv "$ZIP_FILE_PORT" port_firmware.zip
-            else
-              echo "::error::No port firmware files (.enc or .zip) found after download."
-              exit 1
-            fi
-          fi
-          
-          mv port_firmware.zip ../work/port_firmware.zip
-          cd ..
-          rm -rf port_fw
+          PORT_ARGS+=(--samloader "${{ github.event.inputs.port_model }}" "${{ github.event.inputs.port_csc }}" "${{ github.event.inputs.port_imei }}")
         fi
 
-        # 2. Execute selected Porting Tool
-        if [[ "${{ github.event.inputs.porting_tool }}" == "Link2GSI" ]]; then
-          echo "==> Porting using Link2GSI..."
-          git clone https://github.com/minhmc2007/Link2GSI
-          cd Link2GSI
-          
-          # Fix Submodules
-          rm -rf Tools/Firmware_extractor
-          git clone https://github.com/erfanoabdi/Firmware_extractor.git Tools/Firmware_extractor
-          
-          # Recursively patch all unlz4 calls inside Link2GSI scripts to force file outputs
-          echo "==> Patching all unlz4 extraction commands..."
-          find . -name "*.sh" -exec sed -i 's/unlz4 "$tmpdir\/$file"/unlz4 -m "$tmpdir\/$file"/g' {} +
-          
-          # Execute Port
-          sudo bash LinkToGSI.sh "../work/port_firmware.zip" "${{ github.event.inputs.port_rom_type }}"
-          
-          # Locate Output
-          IMG=$(find Output -name "*.img" | head -n1)
-          if [ -z "$IMG" ]; then echo "::error::Link2GSI failed to produce an image." && exit 1; fi
-          
-          # Move to work dir
-          sudo mv "$IMG" ../work/custom_system.img
-          sudo chown $(whoami) ../work/custom_system.img
-          cd ..
-          sudo rm -rf Link2GSI
-        else
-          echo "==> Porting using ErfanGSIs..."
-          git clone --recurse-submodules https://github.com/erfanoabdi/ErfanGSIs.git
-          cd ErfanGSIs
-          
-          # Setup ErfanGSIs requirements (using non-interactive sed patch)
-          echo "==> Setting up requirements for ErfanGSIs..."
-          sed -i 's/apt install/apt install -y/g' setup.sh
-          
-          # Patch outdated packages & pycrypto compilation issues on Python 3.12+
-          sed -i 's/python-pip/python3-pip/g' setup.sh
-          sed -i 's/pycrypto/pycryptodome/g' setup.sh
-          sed -i 's/pip install/pip install --break-system-packages/g' setup.sh
-          
-          sudo bash setup.sh
-          
-          # Recursively patch all unlz4 calls inside ErfanGSIs scripts to force file outputs
-          echo "==> Patching all unlz4 extraction commands..."
-          find . -name "*.sh" -exec sed -i 's/unlz4 "$tmpdir\/$file"/unlz4 -m "$tmpdir\/$file"/g' {} +
-          
-          # Run ErfanGSIs on the local zip
-          echo "==> Running url2GSI.sh..."
-          sudo ./url2GSI.sh "../work/port_firmware.zip" "${{ github.event.inputs.port_rom_type }}"
-          
-          # Find output image in output or out or root directory
-          echo "==> Locating ErfanGSIs output image..."
-          IMG=$(find output out . -name "*GSI*.img" -o -name "*Aonly*.img" -o -name "*AB*.img" 2>/dev/null | head -n1)
-          
-          if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then 
-            echo "::error::ErfanGSIs failed to produce an image."
-            exit 1
-          fi
-          
-          echo "Found GSI image: $IMG"
-          # Move to work dir
-          sudo mv "$IMG" ../work/custom_system.img
-          sudo chown $(whoami) ../work/custom_system.img
-          cd ..
-          sudo rm -rf ErfanGSIs
-        fi
-        
-        # Cleanup source firmware zip
-        sudo rm -f work/port_firmware.zip
+        ./scripts/oem_port.sh "${PORT_ARGS[@]}"
+
+    - name: Patch Firmware Partitions (OEM Port Only)
+      if: github.event.inputs.enable_oem_port == 'true'
+      run: |
+        echo "==> Patching firmware partitions for ported ROM compatibility..."
+        chmod +x ./scripts/patch_firmware.sh
+        sudo ./scripts/patch_firmware.sh --super work/stock_super_sparse.img work/patched_partitions
 
     - name: Download Custom System (GSI Mode)
       if: github.event.inputs.enable_oem_port == 'false'
@@ -363,15 +258,15 @@ jobs:
         echo "==> EROFS Compression Enabled. Processing custom_system.img..."
         
         # Download the script if it does not exist in the root repo
-        if [ ! -f "./compress_system_img.sh" ]; then
+        if [ ! -f "./scripts/compress_system_img.sh" ]; then
           echo "compress_system_img.sh not found locally. Downloading from Custom-Super-Maker repository..."
-          wget -q https://raw.githubusercontent.com/minhmc2007/Custom-Super-Maker/main/compress_system_img.sh -O compress_system_img.sh
+          wget -q https://raw.githubusercontent.com/minhmc2007/Custom-Super-Maker/main/scripts/compress_system_img.sh -O scripts/compress_system_img.sh
         fi
         
-        chmod +x compress_system_img.sh
+        chmod +x ./scripts/compress_system_img.sh
         
         # Execute compression script with a DIFFERENT output name to prevent corruption
-        sudo ./compress_system_img.sh work/custom_system.img work/custom_system_compressed.img
+        sudo ./scripts/compress_system_img.sh work/custom_system.img work/custom_system_compressed.img
         
         # Verification & Safe Replace
         if [ -f "work/custom_system_compressed.img" ] && [ -s "work/custom_system_compressed.img" ]; then
@@ -394,13 +289,24 @@ jobs:
         if [ ! -f "work/stock_super_sparse.img" ]; then echo "::error::Stock Super Image missing."; exit 1; fi
         if [ ! -f "work/custom_system.img" ]; then echo "::error::Custom System Image missing."; exit 1; fi
         
-        # 2. Execute with Sudo (Required for EROFS/Mounting)
-        sudo ./repacksuper_lite.sh \
+        # 2. Check if patched partitions exist (from OEM port mode)
+        PATCHED_FLAG=""
+        if [ -d "work/patched_partitions" ]; then
+          echo "==> Found patched partitions directory. Using patched images instead of stock."
+          PATCHED_FLAG="-P work/patched_partitions"
+        elif [ -f "work/patched_vendor.img" ]; then
+          echo "==> Found patched vendor image (legacy). Using it instead of stock vendor."
+          PATCHED_FLAG="work/patched_vendor.img"
+        fi
+        
+        # 3. Execute with Sudo (Required for EROFS/Mounting)
+        sudo ./scripts/repacksuper_lite.sh \
+          $PATCHED_FLAG \
           work/stock_super_sparse.img \
           work/custom_system.img \
           work/repacked_super.img
         
-        # 3. Verify Output
+        # 4. Verify Output
         if [ ! -f "work/repacked_super.img" ]; then
            echo "::error::Repack script finished but output file is missing."
            exit 1

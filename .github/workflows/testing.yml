@@ -77,7 +77,7 @@ on:
 
       # --- Options ---
       enable_erofs_compression:
-        description: 'Compress System.img via EROFS (Max Compression)'
+        description: 'Compress System.img via EROFS (Highly Recommended, keeps image size within super.img bounds)'
         required: true
         type: boolean
         default: true
@@ -163,17 +163,17 @@ jobs:
         echo "Base Firmware Version: $VERSION_BASE"
         
         echo "==> Downloading Base Firmware..."
-        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" download -v "$VERSION_BASE" -O .
+        # Force samloader to output to a specific filename to prevent wildcard detection issues
+        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" download -v "$VERSION_BASE" -o firmware.zip.enc4
         
-        ENC_FILE_BASE=$(ls *.enc* | head -n1)
-        if [ -z "$ENC_FILE_BASE" ]; then
-          echo "::error::Base firmware download failed (no encrypted file found)."
+        if [ ! -f "firmware.zip.enc4" ]; then
+          echo "::error::Base firmware download failed (firmware.zip.enc4 not found)."
           exit 1
         fi
         
         echo "==> Decrypting Base Firmware..."
-        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" decrypt -v "$VERSION_BASE" -i "$ENC_FILE_BASE" -o stock_firmware.zip
-        rm "$ENC_FILE_BASE"
+        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" decrypt -v "$VERSION_BASE" -i firmware.zip.enc4 -o stock_firmware.zip
+        rm -f firmware.zip.enc4
         
         echo "==> Extracting Super Partition..."
         # Extract AP file
@@ -219,17 +219,17 @@ jobs:
           echo "Port Firmware Version: $VERSION_PORT"
           
           echo "==> Downloading Port Firmware..."
-          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -O .
+          # Force samloader to output to a specific filename to prevent wildcard detection issues
+          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -o port_firmware.zip.enc4
           
-          ENC_FILE_PORT=$(ls *.enc* | head -n1)
-          if [ -z "$ENC_FILE_PORT" ]; then
-            echo "::error::Port firmware download failed (no encrypted file found)."
+          if [ ! -f "port_firmware.zip.enc4" ]; then
+            echo "::error::Port firmware download failed (port_firmware.zip.enc4 not found)."
             exit 1
           fi
           
           echo "==> Decrypting Port Firmware..."
-          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i "$ENC_FILE_PORT" -o port_firmware.zip
-          rm "$ENC_FILE_PORT"
+          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i port_firmware.zip.enc4 -o port_firmware.zip
+          rm -f port_firmware.zip.enc4
           
           mv port_firmware.zip ../work/port_firmware.zip
           cd ..

@@ -175,10 +175,10 @@ elif [ "$PORT_TOOL" = "ErfanGSIs" ]; then
     # Patch update.sh to also fix unlz4 AFTER it updates submodules,
     # so the fix survives the submodule reset.
     echo "==> Patching update.sh to fix unlz4 after submodule update..."
-    sed -i '/git submodule update/a find . -path "*/Firmware_extractor/extractor.sh" -exec sed -i "s/unlz4 \\"\\$tmpdir\\/\\$file\\"/unlz4 -m \\"\\$tmpdir\\/\\$file\\"/g" {} +' update.sh
+    sed -i '/git submodule update/a find . -path "*/Firmware_extractor/extractor.sh" -exec sed -i "s/unlz4/unlz4 -m/g" {} +' update.sh
 
-    echo "==> Running url2GSI.sh..."
-    sudo ./url2GSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE"
+    echo "==> Running url2GSI.sh (stdout muted - binary output)..."
+    sudo ./url2GSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE" > /dev/null
 
     echo "==> Locating ErfanGSIs output image..."
     IMG=$(find output out . -name "*GSI*.img" -o -name "*Aonly*.img" -o -name "*AB*.img" 2>/dev/null | head -n1)

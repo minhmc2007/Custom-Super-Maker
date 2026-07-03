@@ -1,3 +1,49 @@
+Custom-Super-Maker - Samsung firmware repacking toolkit
+Copyright (C) 2024-2025 Minhmc2077
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+ADDITIONAL TERMS (Output Artifact Attribution)
+
+Any custom ROM, firmware, or super.img binary ("Output Artifact") produced
+using this software or its associated GitHub Actions workflows must give
+appropriate credit to the author (Minhmc2077) and this project
+(Custom-Super-Maker). Attribution can be provided by including the following
+in the Output Artifact's build.prop or accompanying documentation:
+
+    Built with Custom-Super-Maker by Minhmc2077
+    https://github.com/minhmc2077/Custom-Super-Maker
+
+This additional requirement is permitted under Section 7 of the GPLv3
+as a requirement for conveying modified versions of the covered work.
+
+---
+
+Third-Party Components
+- repacksuper.sh: Based on work by Uluruman (original XDA thread, license unknown)
+- ErfanGSIs: Copyright (C) 2019 Erfan Abdi, GPL-3.0
+- Link2GSI: Forked from RadGoodNow/YaEbuEbuGSITool, no explicit license (All Rights Reserved)
+- QuantumROM: Copyright Minhmc2077, GPL-3.0
+
+This project incorporates components with various licenses. The GPLv3 applies
+to all original code authored by Minhmc2077. Third-party components carry
+their own respective licenses as noted above.
+
+---
+
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 

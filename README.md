@@ -92,10 +92,30 @@ Stuck on a step? Found a bug? Or just want to flex your benchmark scores?
 
 ---
 
-## 🙏 Credits & Legal
+## 📜 License
 
-- **Core Script**: Based on `repacksuper.sh` by [Uluruman](https://github.com/uluruman).
-- **License**: GNU GPL v3.
+**Dual-licensed under GNU GPL v3 + Additional Terms.**
+
+All original code in this repository is copyright (C) 2024-2025 Minhmc2077 and licensed under **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for the full text.
+
+This project incorporates code from several sources:
+- **QuantumROM**: GPL-3.0
+- **ErfanGSIs**: GPL-3.0 by Erfan Abdi
+- **repacksuper.sh**: Based on work by Uluruman (from XDA, original license unknown)
+- **Link2GSI**: Forked from RadGoodNow/YaEbuEbuGSITool (no explicit license)
+
+### Output Artifact Attribution
+
+If you publish or distribute any custom ROM, firmware, or `super.img` binary that was **built using this project's GitHub Actions workflows or scripts**, you **MUST** give appropriate credit to the author and this project.
+
+Include the following in your ROM's `build.prop` or accompanying documentation:
+
+```
+Built with Custom-Super-Maker by Minhmc2077
+https://github.com/minhmc2077/Custom-Super-Maker
+```
+
+This project took over a year of development. Please respect that effort.
 
 ### ⚠️ Disclaimer
 > **I am not responsible for bricked devices.** If you ignore the warnings, flash the wrong architecture, or ignore the "Format Data" step, your phone will become a very expensive paperweight. You are choosing to make these modifications. If you point the finger at me, I will laugh. **Basic reading comprehension is a requirement for using this tool.**

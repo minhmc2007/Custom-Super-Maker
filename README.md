@@ -96,7 +96,7 @@ Stuck on a step? Found a bug? Or just want to flex your benchmark scores?
 
 **Dual-licensed under GNU GPL v3 + Additional Terms.**
 
-All original code in this repository is copyright (C) 2024-2025 Minhmc2077 and licensed under **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for the full text.
+All original code in this repository is copyright (C) 2025-2026 Minhmc2077 and licensed under **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for the full text.
 
 This project incorporates code from several sources:
 - **QuantumROM**: GPL-3.0

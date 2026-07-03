@@ -143,7 +143,7 @@ if [ "$PORT_TOOL" = "Link2GSI" ]; then
     git clone https://github.com/erfanoabdi/Firmware_extractor.git Tools/Firmware_extractor
 
     echo "==> Patching unlz4 in Firmware_extractor..."
-    find Tools/Firmware_extractor -name "*.sh" -exec sed -i 's/unlz4 "\$tmpdir\/\$file"/unlz4 -m "\$tmpdir\/\$file"/g' {} +
+    find Tools/Firmware_extractor -name "*.sh" -exec sed -i 's|unlz4 "$tmpdir/$file"|unlz4 -c "$tmpdir/$file" > "${tmpdir}/${file%.lz4}"|g' {} +
 
     sudo bash LinkToGSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE"
 
@@ -171,11 +171,45 @@ elif [ "$PORT_TOOL" = "ErfanGSIs" ]; then
 
     sudo bash setup.sh
 
+    # Create EROFS-to-ext4 converter helper script
+    echo "==> Creating EROFS-to-ext4 converter..."
+    cat > convert_erofs_to_ext4.sh << 'EROFSEOF'
+#!/bin/bash
+WORKDIR="$1"
+for img in "$WORKDIR"/*.img; do
+    [ -f "$img" ] || continue
+    if file "$img" | grep -qi "erofs"; then
+        echo "Converting EROFS $(basename "$img") to ext4..."
+        mnt=$(mktemp -d)
+        sudo mount -o loop -t erofs "$img" "$mnt" 2>/dev/null || { echo "  mount failed, skipping"; rmdir "$mnt" 2>/dev/null; continue; }
+        sz=$(stat --format="%s" "$img")
+        newsz=$((sz / 1048576 + 1))
+        dd if=/dev/zero of="$img.tmp" bs=1048576 count=$newsz 2>/dev/null
+        mkfs.ext4 -F "$img.tmp" >/dev/null 2>&1
+        mnt2=$(mktemp -d)
+        sudo mount -o loop "$img.tmp" "$mnt2" 2>/dev/null
+        sudo cp -a "$mnt"/* "$mnt2"/ 2>/dev/null
+        sudo umount "$mnt2" 2>/dev/null
+        sudo umount "$mnt" 2>/dev/null
+        mv "$img.tmp" "$img"
+        rmdir "$mnt" "$mnt2" 2>/dev/null
+    fi
+done
+EROFSEOF
+    chmod +x convert_erofs_to_ext4.sh
+
     # url2GSI.sh calls update.sh which resets submodules (including Firmware_extractor).
-    # Patch update.sh to also fix unlz4 AFTER it updates submodules,
+    # Patch update.sh to fix unlz4 AFTER it updates submodules,
     # so the fix survives the submodule reset.
     echo "==> Patching update.sh to fix unlz4 after submodule update..."
-    sed -i '/git submodule update/a find . -path "*/Firmware_extractor/extractor.sh" -exec sed -i "s/unlz4/unlz4 -m/g" {} +' update.sh
+    # Only target the super section pattern (without -f flags) to not break tarmd5
+    cat >> update.sh << 'UNLZEOF'
+find . -path "*/Firmware_extractor/extractor.sh" -exec sed -i 's|unlz4 "$tmpdir/$file"|unlz4 -c "$tmpdir/$file" > "${tmpdir}/${file%.lz4}"|g' {} +
+UNLZEOF
+
+    # Patch url2GSI.sh directly to add EROFS conversion after extractor.sh
+    echo "==> Patching url2GSI.sh to add EROFS conversion..."
+    sed -i '/\$TOOLS_DIR\/Firmware_extractor\/extractor.sh/a\ sudo bash '"$PWD"'/convert_erofs_to_ext4.sh "$PROJECT_DIR/working"' url2GSI.sh
 
     echo "==> Running url2GSI.sh (stdout muted - binary output)..."
     sudo ./url2GSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE" > /dev/null

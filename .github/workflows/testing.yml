@@ -268,6 +268,10 @@ jobs:
           rm -rf Tools/Firmware_extractor
           git clone https://github.com/erfanoabdi/Firmware_extractor.git Tools/Firmware_extractor
           
+          # Patch Firmware_extractor's extractor.sh to force file outputs and avoid console binary dumping
+          echo "==> Patching extractor.sh..."
+          sed -i 's/unlz4 "$tmpdir\/$file"/unlz4 -m "$tmpdir\/$file"/g' Tools/Firmware_extractor/extractor.sh
+          
           # Execute Port
           sudo bash LinkToGSI.sh "../work/port_firmware.zip" "${{ github.event.inputs.port_rom_type }}"
           

@@ -3,20 +3,19 @@ name: Android Super Repack + OEM Port
 on:
   workflow_dispatch:
     inputs:
-      # --- Device Source (Base Firmware) ---
-      device_preset:
-        description: 'Base: Select Device Firmware'
+      # --- Base Firmware (Stock Super) ---
+      base_model:
+        description: 'Base: Samsung Model (e.g., SM-A155F)'
         required: true
-        default: 'none'
-        type: choice
-        options:
-        - 'none (Use Custom URL below)'
-        - 'Samsung A04s (64GB)'
-        - 'Samsung A12s A127F'
-        - 'Samsung A15 (128/256GB)'
-      stock_firmware_url:
-        description: 'Base: URL (If preset is none)'
-        required: false
+        type: string
+      base_csc:
+        description: 'Base: CSC / Region (e.g., XXV)'
+        required: true
+        type: string
+        default: 'XXV'
+      base_imei:
+        description: 'Base: IMEI (15-digit, matching the base model)'
+        required: true
         type: string
 
       # --- Custom ROM Source (System Image) ---
@@ -25,24 +24,50 @@ on:
         required: true
         type: boolean
         default: false
+
+      porting_tool:
+        description: 'Port Tool: Select Porting Script'
+        required: false
+        type: choice
+        options:
+          - Link2GSI
+          - ErfanGSIs
+        default: 'Link2GSI'
       
-      # If Mode = Porting
+      # If Mode = Porting (Source Options)
       port_firmware_url:
-        description: 'Port Source: Firmware URL (e.g. HyperOS, OxygenOS zip)'
+        description: 'Port Source: Custom Firmware URL (Alternative to Samloader, for ErfanGSIs)'
         required: false
         type: string
-      rom_type:
+
+      port_model:
+        description: 'Port Source: Samsung Model (e.g., SM-S918B, if downloading via Samloader)'
+        required: false
+        type: string
+      port_csc:
+        description: 'Port Source: CSC / Region (e.g., XXV, if downloading via Samloader)'
+        required: false
+        type: string
+        default: 'XXV'
+      port_imei:
+        description: 'Port Source: IMEI (15-digit, if downloading via Samloader)'
+        required: false
+        type: string
+
+      port_rom_type:
         description: 'Port Source: ROM Type'
         required: false
         type: choice
         options:
           - OneUI
           - Pixel
-          - MIUIGeneric
-          - HyperOS
+          - MIUI
           - OxygenOS
           - Flyme
           - Moto
+          - ColorOS
+          - Generic
+        default: 'OneUI'
 
       # If Mode = GSI/Custom ROM
       custom_system_url:
@@ -57,7 +82,7 @@ on:
         type: boolean
         default: true
       upload_to_release:
-        description: 'Upload Result to Release?'
+        description: 'Upload Result to GitHub Release?'
         required: true
         type: boolean
         default: false
@@ -94,12 +119,13 @@ jobs:
         echo "==> Installing Tools..."
         sudo apt-get update -qq
         # Android & Filesystem Tools
-        sudo apt-get install -y -qq android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils cpio rsync
+        sudo apt-get install -y -qq android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils cpio rsync jq
         # Porting Support Tools
         sudo apt-get install -y -qq unace unrar zip p7zip-rar sharutils rar uudeview mpack arj cabextract rename liblzma-dev brotli lz4 protobuf-compiler git gawk python3-pip
         
-        # Python Libs
-        pip install -q gdown backports.lzma protobuf twrpdtgen extract-dtb pycryptodome
+        # Python Libs & Samloader
+        pip3 install -q gdown backports.lzma protobuf twrpdtgen extract-dtb pycryptodome --break-system-packages
+        pip3 install git+https://github.com/SN-Abdullah-Al-Noman/samloader.git --break-system-packages
 
     - name: Prepare Workspace & Script
       run: |
@@ -119,28 +145,35 @@ jobs:
         fi
 
     # --------------------------------------------------------------------------
-    # 2. Base Firmware Acquisition (Stock Super)
+    # 2. Base Firmware Acquisition (Stock Super via Samloader)
     # --------------------------------------------------------------------------
     - name: Download Base Firmware
       run: |
         cd work
-        PRESET="${{ github.event.inputs.device_preset }}"
-        URL="${{ github.event.inputs.stock_firmware_url }}"
+        MODEL="${{ github.event.inputs.base_model }}"
+        CSC="${{ github.event.inputs.base_csc }}"
+        IMEI="${{ github.event.inputs.base_imei }}"
+        
+        echo "==> Checking Base Firmware Version..."
+        VERSION_BASE=$(python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" checkupdate 2>/dev/null)
+        if [ -z "$VERSION_BASE" ]; then
+          echo "::error::Failed to fetch version for Base Model: $MODEL ($CSC). Please check the model name, CSC, or IMEI."
+          exit 1
+        fi
+        echo "Base Firmware Version: $VERSION_BASE"
         
         echo "==> Downloading Base Firmware..."
-        if [[ "$PRESET" == "Samsung A04s (64GB)" ]]; then
-          gdown --quiet --output stock_firmware.zip '1C9GtYTn1EZ4sQN7qfJeWN6gxDj_WbgY-'
-        elif [[ "$PRESET" == "Samsung A12s A127F" ]]; then
-          gdown --quiet --output stock_firmware.zip '1J38ATKSjoVN2yqVc_GF6JD9GKaPuhK2g'
-        elif [[ "$PRESET" == "Samsung A15 (128/256GB)" ]]; then
-          gdown --quiet --output stock_firmware.zip '12FoeBkPDHddj4lzd-T6pjHRQ8Ey3c2U8'
-        elif [ -n "$URL" ]; then
-           if [[ $URL == *"mega.nz"* ]]; then megadl -o stock_firmware.zip "$URL"; else wget -q --content-disposition -O stock_firmware.zip "$URL"; fi
-        else
-           echo "::error::No device preset or URL selected." && exit 1
+        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" download -v "$VERSION_BASE" -O .
+        
+        ENC_FILE_BASE=$(ls *.enc* | head -n1)
+        if [ -z "$ENC_FILE_BASE" ]; then
+          echo "::error::Base firmware download failed (no encrypted file found)."
+          exit 1
         fi
         
-        if [ ! -s "stock_firmware.zip" ]; then echo "::error::Download failed or empty." && exit 1; fi
+        echo "==> Decrypting Base Firmware..."
+        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" decrypt -v "$VERSION_BASE" -i "$ENC_FILE_BASE" -o stock_firmware.zip
+        rm "$ENC_FILE_BASE"
         
         echo "==> Extracting Super Partition..."
         # Extract AP file
@@ -160,27 +193,104 @@ jobs:
       if: github.event.inputs.enable_oem_port == 'true'
       run: |
         echo "==> Porting Mode Enabled."
-        git clone https://github.com/minhmc2007/Link2GSI
-        cd Link2GSI
         
-        # Fix Submodules
-        rm -rf Tools/Firmware_extractor
-        git clone https://github.com/erfanoabdi/Firmware_extractor.git Tools/Firmware_extractor
+        # 1. Acquire Port Firmware Zip
+        if [ -n "${{ github.event.inputs.port_firmware_url }}" ]; then
+          echo "==> Downloading Port Firmware via URL..."
+          wget -q --content-disposition -O work/port_firmware.zip "${{ github.event.inputs.port_firmware_url }}"
+        else
+          echo "==> Fetching Port Firmware via Samloader..."
+          PORT_MODEL="${{ github.event.inputs.port_model }}"
+          PORT_CSC="${{ github.event.inputs.port_csc }}"
+          PORT_IMEI="${{ github.event.inputs.port_imei }}"
+          
+          if [ -z "$PORT_MODEL" ] || [ -z "$PORT_CSC" ] || [ -z "$PORT_IMEI" ]; then
+            echo "::error::Both Porting URL and Samloader parameters (Model, CSC, IMEI) are missing."
+            exit 1
+          fi
+          
+          mkdir -p port_fw && cd port_fw
+          echo "==> Checking Port Firmware Version..."
+          VERSION_PORT=$(python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" checkupdate 2>/dev/null)
+          if [ -z "$VERSION_PORT" ]; then
+            echo "::error::Failed to fetch version for Port Model: $PORT_MODEL ($PORT_CSC). Check model, CSC, or IMEI."
+            exit 1
+          fi
+          echo "Port Firmware Version: $VERSION_PORT"
+          
+          echo "==> Downloading Port Firmware..."
+          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -O .
+          
+          ENC_FILE_PORT=$(ls *.enc* | head -n1)
+          if [ -z "$ENC_FILE_PORT" ]; then
+            echo "::error::Port firmware download failed (no encrypted file found)."
+            exit 1
+          fi
+          
+          echo "==> Decrypting Port Firmware..."
+          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i "$ENC_FILE_PORT" -o port_firmware.zip
+          rm "$ENC_FILE_PORT"
+          
+          mv port_firmware.zip ../work/port_firmware.zip
+          cd ..
+          rm -rf port_fw
+        fi
+
+        # 2. Execute selected Porting Tool
+        if [[ "${{ github.event.inputs.porting_tool }}" == "Link2GSI" ]]; then
+          echo "==> Porting using Link2GSI..."
+          git clone https://github.com/minhmc2007/Link2GSI
+          cd Link2GSI
+          
+          # Fix Submodules
+          rm -rf Tools/Firmware_extractor
+          git clone https://github.com/erfanoabdi/Firmware_extractor.git Tools/Firmware_extractor
+          
+          # Execute Port
+          sudo bash LinkToGSI.sh "../work/port_firmware.zip" "${{ github.event.inputs.port_rom_type }}"
+          
+          # Locate Output
+          IMG=$(find Output -name "*.img" | head -n1)
+          if [ -z "$IMG" ]; then echo "::error::Link2GSI failed to produce an image." && exit 1; fi
+          
+          # Move to work dir
+          sudo mv "$IMG" ../work/custom_system.img
+          sudo chown $(whoami) ../work/custom_system.img
+          cd ..
+          sudo rm -rf Link2GSI
+        else
+          echo "==> Porting using ErfanGSIs..."
+          git clone --recurse-submodules https://github.com/erfanoabdi/ErfanGSIs.git
+          cd ErfanGSIs
+          
+          # Setup ErfanGSIs requirements (using non-interactive sed patch)
+          echo "==> Setting up requirements for ErfanGSIs..."
+          sed -i 's/apt install/apt install -y/g' setup.sh
+          sudo bash setup.sh
+          
+          # Run ErfanGSIs on the local zip
+          echo "==> Running url2GSI.sh..."
+          sudo ./url2GSI.sh "../work/port_firmware.zip" "${{ github.event.inputs.port_rom_type }}"
+          
+          # Find output image in output or out or root directory
+          echo "==> Locating ErfanGSIs output image..."
+          IMG=$(find output out . -name "*GSI*.img" -o -name "*Aonly*.img" -o -name "*AB*.img" 2>/dev/null | head -n1)
+          
+          if [ -z "$IMG" ] || [ ! -f "$IMG" ]; then 
+            echo "::error::ErfanGSIs failed to produce an image."
+            exit 1
+          fi
+          
+          echo "Found GSI image: $IMG"
+          # Move to work dir
+          sudo mv "$IMG" ../work/custom_system.img
+          sudo chown $(whoami) ../work/custom_system.img
+          cd ..
+          sudo rm -rf ErfanGSIs
+        fi
         
-        # Download Source
-        wget -q --content-disposition -O firmware.zip "${{ github.event.inputs.port_firmware_url }}"
-        
-        # Execute Port
-        sudo bash LinkToGSI.sh "$(pwd)/firmware.zip" "${{ github.event.inputs.rom_type }}"
-        
-        # Locate Output
-        IMG=$(find Output -name "*.img" | head -n1)
-        if [ -z "$IMG" ]; then echo "::error::Porting failed to produce an image." && exit 1; fi
-        
-        # Move to work dir
-        sudo mv "$IMG" ../work/custom_system.img
-        sudo chown $(whoami) ../work/custom_system.img
-        sudo rm -rf ../Link2GSI
+        # Cleanup source firmware zip
+        sudo rm -f work/port_firmware.zip
 
     - name: Download Custom System (GSI Mode)
       if: github.event.inputs.enable_oem_port == 'false'
@@ -225,7 +335,6 @@ jobs:
         chmod +x compress_system_img.sh
         
         # Execute compression script with a DIFFERENT output name to prevent corruption
-        # Usage: sudo ./compress_system_img.sh <input_system.img> <output_system.img>
         sudo ./compress_system_img.sh work/custom_system.img work/custom_system_compressed.img
         
         # Verification & Safe Replace
@@ -250,7 +359,6 @@ jobs:
         if [ ! -f "work/custom_system.img" ]; then echo "::error::Custom System Image missing."; exit 1; fi
         
         # 2. Execute with Sudo (Required for EROFS/Mounting)
-        # Usage: sudo ./script <Source> <System> <Output>
         sudo ./repacksuper_lite.sh \
           work/stock_super_sparse.img \
           work/custom_system.img \
@@ -277,13 +385,42 @@ jobs:
         
         echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
 
-    - name: Upload Repack Result as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: super_repack_${{ github.run_id }}
-        path: ${{ steps.package.outputs.tar_path }}
+    - name: Upload Repacked Image to GoFile
+      run: |
+        echo "==> Uploading final package to GoFile..."
+        FILE_PATH="${{ steps.package.outputs.tar_path }}"
+        if [ ! -f "$FILE_PATH" ]; then
+          echo "::error::Package file not found at $FILE_PATH"
+          exit 1
+        fi
+        
+        # Query best available GoFile server, fallback to the global upload endpoint if none found
+        SERVER=$(curl -s https://api.gofile.io/getServer | jq -r '.data.server')
+        if [ -z "$SERVER" ] || [ "$SERVER" = "null" ]; then
+          echo "==> Server query empty. Falling back to global upload proxy..."
+          RESPONSE=$(curl -s -X POST "https://upload.gofile.io/uploadfile" -F "file=@$FILE_PATH")
+        else
+          echo "==> Uploading via server: $SERVER"
+          RESPONSE=$(curl -s -F "file=@$FILE_PATH" "https://${SERVER}.gofile.io/uploadFile")
+        fi
+        
+        # Parse download page link
+        DOWNLOAD_URL=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
+        if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
+          echo "==> Upload succeeded!"
+          echo "::notice::Download Link: $DOWNLOAD_URL"
+          
+          # Print formatting directly to the step summary page
+          echo "### 🚀 Repack Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "The repacked partition package has been uploaded successfully." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**GoFile Download Link:** [$DOWNLOAD_URL]($DOWNLOAD_URL)" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "::error::GoFile upload failed. API Response: $RESPONSE"
+          exit 1
+        fi
 
-    - name: Upload to Release
+    - name: Upload to Release (Optional)
       if: github.event.inputs.upload_to_release == 'true'
       uses: softprops/action-gh-release@v2
       with:

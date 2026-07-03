@@ -119,7 +119,7 @@ This project took over a year of development. Please respect that effort.
 
 ### ❗ Respect the Work
 
-If you use this project's work and claim it as your own — or steal code like QuantumROM while stripping the original dev's credits — **DMCA will take care of you**. This project is open source and you **must** respect the work of the developers. They spent countless hours on this. What do I earn? **Nothing.** No money, no items, nothing material. I earn trust, reputation, and respect from users and other developers — and that's more valuable. Don't be a leech. Credit properly or face the consequences.
+Some people steal QuantumROM's output (`.img` files) and code, strip the original dev's credits, and claim it as their own. That also applies to anything built with this project — **DMCA will take care of you**. This project is open source and you **must** respect the work of the developers. They spent countless hours on this. What do I earn? **Nothing.** No money, no items, nothing material. I earn trust, reputation, and respect from users and other developers — and that's more valuable. Don't be a leech. Credit properly or face the consequences.
 
 ### ⚠️ Disclaimer
 > **I am not responsible for bricked devices.** If you ignore the warnings, flash the wrong architecture, or ignore the "Format Data" step, your phone will become a very expensive paperweight. You are choosing to make these modifications. If you point the finger at me, I will laugh. **Basic reading comprehension is a requirement for using this tool.**

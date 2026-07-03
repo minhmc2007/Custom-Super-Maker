@@ -163,17 +163,28 @@ jobs:
         echo "Base Firmware Version: $VERSION_BASE"
         
         echo "==> Downloading Base Firmware..."
-        # Force samloader to output to a specific filename to prevent wildcard detection issues
-        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" download -v "$VERSION_BASE" -o firmware.zip.enc4
+        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" download -v "$VERSION_BASE" -O .
         
-        if [ ! -f "firmware.zip.enc4" ]; then
-          echo "::error::Base firmware download failed (firmware.zip.enc4 not found)."
-          exit 1
+        echo "==> Checking downloaded files..."
+        ls -la
+        
+        # Auto-detect whether samloader downloaded an encrypted file or decrypted it on-the-fly
+        ENC_FILE=$(find . -maxdepth 1 -name "*.enc*" | head -n1)
+        if [ -n "$ENC_FILE" ]; then
+          echo "==> Found encrypted file: $ENC_FILE. Decrypting manually..."
+          python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" decrypt -v "$VERSION_BASE" -i "$ENC_FILE" -o stock_firmware.zip
+          rm -f "$ENC_FILE"
+        else
+          echo "==> No encrypted file found. Checking for on-the-fly decrypted ZIP..."
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" ! -name "stock_firmware.zip" | head -n1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "==> Found decrypted ZIP file: $ZIP_FILE. Preparing..."
+            mv "$ZIP_FILE" stock_firmware.zip
+          else
+            echo "::error::No firmware files (.enc or .zip) found after download."
+            exit 1
+          fi
         fi
-        
-        echo "==> Decrypting Base Firmware..."
-        python3 -m samloader -m "$MODEL" -r "$CSC" -i "$IMEI" decrypt -v "$VERSION_BASE" -i firmware.zip.enc4 -o stock_firmware.zip
-        rm -f firmware.zip.enc4
         
         echo "==> Extracting Super Partition..."
         # Extract AP file
@@ -219,17 +230,28 @@ jobs:
           echo "Port Firmware Version: $VERSION_PORT"
           
           echo "==> Downloading Port Firmware..."
-          # Force samloader to output to a specific filename to prevent wildcard detection issues
-          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -o port_firmware.zip.enc4
+          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" download -v "$VERSION_PORT" -O .
           
-          if [ ! -f "port_firmware.zip.enc4" ]; then
-            echo "::error::Port firmware download failed (port_firmware.zip.enc4 not found)."
-            exit 1
+          echo "==> Checking downloaded files..."
+          ls -la
+          
+          # Auto-detect whether samloader downloaded an encrypted file or decrypted it on-the-fly
+          ENC_FILE_PORT=$(find . -maxdepth 1 -name "*.enc*" | head -n1)
+          if [ -n "$ENC_FILE_PORT" ]; then
+            echo "==> Found encrypted port file: $ENC_FILE_PORT. Decrypting manually..."
+            python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i "$ENC_FILE_PORT" -o port_firmware.zip
+            rm -f "$ENC_FILE_PORT"
+          else
+            echo "==> No encrypted port file found. Checking for on-the-fly decrypted ZIP..."
+            ZIP_FILE_PORT=$(find . -maxdepth 1 -name "*.zip" ! -name "port_firmware.zip" | head -n1)
+            if [ -n "$ZIP_FILE_PORT" ]; then
+              echo "==> Found decrypted ZIP file: $ZIP_FILE_PORT. Preparing..."
+              mv "$ZIP_FILE_PORT" port_firmware.zip
+            else
+              echo "::error::No port firmware files (.enc or .zip) found after download."
+              exit 1
+            fi
           fi
-          
-          echo "==> Decrypting Port Firmware..."
-          python3 -m samloader -m "$PORT_MODEL" -r "$PORT_CSC" -i "$PORT_IMEI" decrypt -v "$VERSION_PORT" -i port_firmware.zip.enc4 -o port_firmware.zip
-          rm -f port_firmware.zip.enc4
           
           mv port_firmware.zip ../work/port_firmware.zip
           cd ..

@@ -292,6 +292,12 @@ jobs:
           # Setup ErfanGSIs requirements (using non-interactive sed patch)
           echo "==> Setting up requirements for ErfanGSIs..."
           sed -i 's/apt install/apt install -y/g' setup.sh
+          
+          # Patch outdated packages & pycrypto compilation issues on Python 3.12+
+          sed -i 's/python-pip/python3-pip/g' setup.sh
+          sed -i 's/pycrypto/pycryptodome/g' setup.sh
+          sed -i 's/pip install/pip install --break-system-packages/g' setup.sh
+          
           sudo bash setup.sh
           
           # Run ErfanGSIs on the local zip

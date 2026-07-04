@@ -229,6 +229,10 @@ jobs:
         echo "==> GSI/ROM Download Mode."
         URL="${{ github.event.inputs.custom_system_url }}"
         if [ -z "$URL" ]; then echo "::error::Custom System URL is required." && exit 1; fi
+
+        CLEAN_URL="${URL%%\?*}"
+        ROM_NAME=$(basename "$CLEAN_URL")
+        echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
         
         cd work
         wget -q -O rom_package "$URL"
@@ -390,10 +394,11 @@ jobs:
         Base: \`${BASE_MODEL} (${BASE_CSC})\`  
         Port: \`${PORT_MODEL}\` → \`${ROM_TYPE}\` via \`${PORT_TOOL}\`"
         else
-          TITLE="CSM Build - ${BASE_MODEL} (${BASE_CSC}) - GSI"
+          GSI_NAME="${{ env.ROM_NAME }}"
+          TITLE="CSM Build - ${BASE_MODEL} (${BASE_CSC}) - ${GSI_NAME}"
           BODY="**Custom-Super-Maker Build**  
         Base: \`${BASE_MODEL} (${BASE_CSC})\`  
-        Mode: GSI Download"
+        GSI: \`${GSI_NAME}\`"
         fi
 
         BODY="${BODY}

@@ -32,13 +32,12 @@ def upload_gofile(file_path: Path, log_func=print) -> str:
     if requests is None:
         raise ImportError("requests library is required for upload")
     log_func("Uploading to GoFile...")
-    srv_resp = requests.get("https://api.gofile.io/getServer", timeout=30)
-    server = srv_resp.json().get("data", {}).get("server")
+    srv_resp = requests.get("https://api.gofile.io/servers", timeout=30)
+    server = srv_resp.json().get("data", {}).get("servers", [{}])[0].get("name")
+    if not server:
+        raise RuntimeError("Failed to get GoFile server")
     with open(file_path, "rb") as f:
-        if server and server != "null":
-            url = f"https://{server}.gofile.io/uploadFile"
-        else:
-            url = "https://upload.gofile.io/uploadfile"
+        url = f"https://{server}.gofile.io/uploadFile"
         log_func(f"Uploading to {url}...")
         resp = requests.post(url, files={"file": f}, timeout=600)
     data = resp.json().get("data", {})

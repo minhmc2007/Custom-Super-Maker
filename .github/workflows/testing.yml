@@ -347,31 +347,27 @@ jobs:
           echo "::error::Package file not found at $FILE_PATH"
           exit 1
         fi
-        
-        # Query best available GoFile server, fallback to the global upload endpoint if none found
-        SERVER=$(curl -s https://api.gofile.io/getServer | jq -r '.data.server')
+
+        SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
         if [ -z "$SERVER" ] || [ "$SERVER" = "null" ]; then
-          echo "==> Server query empty. Falling back to global upload proxy..."
-          RESPONSE=$(curl -s -X POST "https://upload.gofile.io/uploadfile" -F "file=@$FILE_PATH")
-        else
-          echo "==> Uploading via server: $SERVER"
-          RESPONSE=$(curl -s -F "file=@$FILE_PATH" "https://${SERVER}.gofile.io/uploadFile")
+          echo "::error::Failed to get GoFile server"
+          exit 1
         fi
-        
-        # Parse download page link
-        DOWNLOAD_URL=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
-        if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
+
+        echo "==> Uploading via server: $SERVER"
+        LINK=$(curl -# -F "file=@$FILE_PATH" "https://${SERVER}.gofile.io/uploadFile" | jq -r '.data|.downloadPage') 2>&1
+
+        if [ -n "$LINK" ] && [ "$LINK" != "null" ]; then
           echo "==> Upload succeeded!"
-          echo "::notice::Download Link: $DOWNLOAD_URL"
-          echo "gofile_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
-          
-          # Print formatting directly to the step summary page
+          echo "::notice::Download Link: $LINK"
+          echo "gofile_url=$LINK" >> $GITHUB_OUTPUT
+
           echo "### 🚀 Repack Build Successful!" >> $GITHUB_STEP_SUMMARY
           echo "The repacked partition package has been uploaded successfully." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**GoFile Download Link:** [$DOWNLOAD_URL]($DOWNLOAD_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "**GoFile Download Link:** [$LINK]($LINK)" >> $GITHUB_STEP_SUMMARY
         else
-          echo "::error::GoFile upload failed. API Response: $RESPONSE"
+          echo "::error::GoFile upload failed."
           exit 1
         fi
 

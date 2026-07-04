@@ -171,112 +171,19 @@ jobs:
       run: |
         cd work
         echo "==> Downloading ASRControl APK..."
-        wget -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk"
-        if [ ! -s "ASRControl.apk" ]; then echo "✗ Warning: APK download failed or empty. Injection will skip."; fi
+        wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
 
-    - name: Ensure Raw Image
+    - name: System Branding (APK, pfetch, build.prop)
       run: |
         cd work
-        mv custom_system.img custom_system.orig
-        if simg2img custom_system.orig custom_system.img; then
-          echo "Converted sparse to raw."
-          rm custom_system.orig
-        else
-          echo "Image is likely already raw or EROFS. Using original."
-          mv custom_system.orig custom_system.img
+        if simg2img custom_system.img custom_system.raw 2>/dev/null; then
+          mv custom_system.raw custom_system.img
         fi
-
-    - name: System Modification (APK, Branding, pfetch)
-      run: |
-        cd work
-        echo "==> Starting Docker for System Modification..."
-
-        wget -O pfetch "https://raw.githubusercontent.com/dylanaraps/pfetch/refs/heads/master/pfetch"
-
-        docker run --rm --privileged \
-          -v "$(pwd):/work" \
-          -e ROM_NAME="${{ env.ROM_NAME }}" \
-          ubuntu:24.04 \
-          bash -c '
-            set -e
-            apt-get update -qq && apt-get install -y -qq e2fsprogs util-linux file erofs-utils android-sdk-libsparse-utils
-            cd /work
-
-            echo "==> Using erofs-utils version:"
-            fsck.erofs -V
-
-            FS_TYPE=$(blkid -o value -s TYPE custom_system.img 2>/dev/null || echo "unknown")
-            if [ "$FS_TYPE" = "unknown" ]; then
-                if file custom_system.img | grep -q "EROFS"; then FS_TYPE="erofs"; fi
-            fi
-            echo "==> Filesystem detected: $FS_TYPE"
-
-            inject_files() {
-                local MOUNT_DIR=$1
-                local TARGET_DIR="$MOUNT_DIR/system/app"
-                if [ ! -d "$TARGET_DIR" ]; then TARGET_DIR="$MOUNT_DIR/app"; fi
-
-                if [ -f "ASRControl.apk" ]; then
-                    mkdir -p "$TARGET_DIR/ASRControl"
-                    cp ASRControl.apk "$TARGET_DIR/ASRControl/ASRControl.apk"
-                    chmod 755 "$TARGET_DIR/ASRControl"
-                    chmod 644 "$TARGET_DIR/ASRControl/ASRControl.apk"
-                    echo "--> APK Injected."
-                fi
-
-                local BIN_DIR="$MOUNT_DIR/system/bin"
-                if [ ! -d "$BIN_DIR" ]; then BIN_DIR="$MOUNT_DIR/bin"; fi
-
-                cp pfetch "$BIN_DIR/pfetch"
-                chmod 755 "$BIN_DIR/pfetch"
-                echo "--> Binary Injection Complete."
-
-                local PROP_FILE="$MOUNT_DIR/system/build.prop"
-                if [ ! -f "$PROP_FILE" ]; then PROP_FILE="$MOUNT_DIR/build.prop"; fi
-
-                if [ -f "$PROP_FILE" ]; then
-                    sed -i "s|ro\.build\.id=.*|ro.build.display.id=Built.By.Minh2077.Script|g" "$PROP_FILE"
-                    if ! grep -q "ro.repack.author" "$PROP_FILE"; then
-                        echo "" >> "$PROP_FILE"
-                        echo "ro.repack.version=v1.0" >> "$PROP_FILE"
-                        echo "ro.repack.author=Minhmc2077" >> "$PROP_FILE"
-                        echo "ro.repack.fs=$FS_TYPE" >> "$PROP_FILE"
-                        echo "ro.repack.gsi=$ROM_NAME" >> "$PROP_FILE"
-                        echo "ro.repack.asr_control=true" >> "$PROP_FILE"
-                        echo "ro.repack.extras=pfetch" >> "$PROP_FILE"
-                    fi
-                fi
-            }
-
-            if [ "$FS_TYPE" = "ext4" ]; then
-              echo "==> Handling EXT4..."
-              echo "--> Extending image size..."
-              truncate -s +2G custom_system.img
-
-              echo "--> Resizing filesystem..."
-              resize2fs -f custom_system.img
-
-              echo "--> Unsharing blocks..."
-              e2fsck -y -E unshare_blocks custom_system.img || [ $? -le 1 ]
-
-              mkdir -p /mnt/sys
-              mount -o loop custom_system.img /mnt/sys
-              inject_files "/mnt/sys"
-              umount /mnt/sys
-
-              echo "--> Shrinking image..."
-              e2fsck -f -y custom_system.img || [ $? -le 1 ]
-              resize2fs -M custom_system.img
-
-            elif [ "$FS_TYPE" = "erofs" ]; then
-              echo "==> Handling EROFS..."
-              fsck.erofs --extract=extracted_system custom_system.img
-              inject_files "extracted_system"
-              mkfs.erofs -zlz4hc custom_system_new.img extracted_system
-              mv custom_system_new.img custom_system.img
-              rm -rf extracted_system
-            fi
-          '
+        chmod +x ../scripts/brand_system.sh
+        sudo ../scripts/brand_system.sh \
+          --image custom_system.img \
+          --apk ASRControl.apk \
+          --gsi-name "${{ env.ROM_NAME }}"
 
     - name: Run Repack
       run: |

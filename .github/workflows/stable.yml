@@ -158,6 +158,18 @@ jobs:
         esac
         
         if [ ! -f "custom_system.img" ]; then echo "✗ Error: custom_system.img not created." && exit 1; fi
+    - name: Download ASRControl APK
+      run: |
+        cd work
+        wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
+    - name: System Branding (APK, pfetch, build.prop)
+      run: |
+        cd work
+        chmod +x ../scripts/brand_system.sh
+        sudo ../scripts/brand_system.sh \
+          --image custom_system.img \
+          --apk ASRControl.apk \
+          --gsi-name "${{ env.ROM_NAME }}"
     - name: Prepare repacksuper.sh flags
       id: prepare_flags
       run: |

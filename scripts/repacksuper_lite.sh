@@ -110,6 +110,7 @@ mkdir -p "$rps_dir" "$super_dir" "$work_dir"
 # Capture Input System Size (For Comparison Table later)
 if [ -f "$custom_system_img" ]; then
     input_source_size=$(stat --format="%s" "$custom_system_img")
+    rom_name=$(basename "$custom_system_img" | sed 's/\.[^.]*$//' | sed 's/_/ /g')
 else
     echo "Error: Custom system image '$custom_system_img' does not exist."
     exit 1
@@ -212,6 +213,46 @@ mount -o ro,loop "$sys_src" "$work_dir/mnt_system"
 echo "--> Syncing Files..."
 rsync -aAX "$work_dir/mnt_system/" "$work_dir/system_build/" > /dev/null
 umount "$work_dir/mnt_system"
+
+# --- Branding (APK + build.prop) ---
+echo "--> Applying system branding..."
+brand_script="$script_dir/brand_system.sh"
+apk_path="$work_dir/ASRControl.apk"
+if [ ! -f "$apk_path" ]; then
+    apk_path="$script_dir/../android/ASRControl/app/build/outputs/apk/debug/app-debug.apk"
+fi
+if [ ! -f "$apk_path" ]; then
+    apk_path=""
+fi
+
+if [ -f "$brand_script" ]; then
+    bash "$brand_script" --dir "$work_dir/system_build" ${apk_path:+--apk "$apk_path"} --gsi-name "$rom_name"
+else
+    # Fallback inline branding if brand_system.sh is missing
+    target_dir="$work_dir/system_build/system/app/ASRControl"
+    [ ! -d "$target_dir" ] && mkdir -p "$target_dir"
+    if [ -n "$apk_path" ] && [ -f "$apk_path" ]; then
+        cp "$apk_path" "$target_dir/ASRControl.apk"
+        chmod 644 "$target_dir/ASRControl.apk"
+    fi
+    bin_dir="$work_dir/system_build/system/bin"
+    [ ! -d "$bin_dir" ] && mkdir -p "$bin_dir"
+    wget -q -O "$bin_dir/pfetch" "https://raw.githubusercontent.com/dylanaraps/pfetch/refs/heads/master/pfetch" 2>/dev/null || true
+    [ -f "$bin_dir/pfetch" ] && chmod 755 "$bin_dir/pfetch"
+    prop="$work_dir/system_build/system/build.prop"
+    [ ! -f "$prop" ] && prop="$work_dir/system_build/build.prop"
+    if [ -f "$prop" ]; then
+        sed -i "s|ro\.build\.id=.*|ro.build.display.id=Built.By.Minh2077.Script|g" "$prop"
+        if ! grep -q "ro.repack.author" "$prop"; then
+            echo "" >> "$prop"
+            echo "ro.repack.version=v1.0" >> "$prop"
+            echo "ro.repack.author=Minhmc2077" >> "$prop"
+            echo "ro.repack.gsi=$rom_name" >> "$prop"
+            echo "ro.repack.asr_control=true" >> "$prop"
+            echo "ro.repack.extras=pfetch" >> "$prop"
+        fi
+    fi
+fi
 
 echo "--> Compressing System (EROFS LZ4HC)..."
 mkfs.erofs -z lz4hc,9 -T 0 --mount-point /system \

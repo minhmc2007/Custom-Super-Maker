@@ -247,10 +247,17 @@ jobs:
         if [ ! -f "custom_system.img" ]; then
            FIND=$(find . -maxdepth 2 -name "*.img" ! -name "stock_super_sparse.img" | head -n1)
            if [ -n "$FIND" ]; then mv "$FIND" custom_system.img; else echo "::error::Extraction failed." && exit 1; fi
-        fi
+         fi
 
     # --------------------------------------------------------------------------
-    # 3.5. EROFS System Image Compression (Safe Mode)
+    # 3.5. Download Branding Assets
+    # --------------------------------------------------------------------------
+    - name: Download ASRControl APK
+      run: |
+        wget -q -O work/ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
+
+    # --------------------------------------------------------------------------
+    # 3.6. EROFS System Image Compression (Safe Mode)
     # --------------------------------------------------------------------------
     - name: Compress System Image (EROFS)
       if: github.event.inputs.enable_erofs_compression == 'true'

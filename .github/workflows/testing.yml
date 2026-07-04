@@ -335,6 +335,7 @@ jobs:
         echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload Repacked Image to GoFile
+      id: upload-gofile
       run: |
         echo "==> Uploading final package to GoFile..."
         FILE_PATH="${{ steps.package.outputs.tar_path }}"
@@ -358,6 +359,7 @@ jobs:
         if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
           echo "==> Upload succeeded!"
           echo "::notice::Download Link: $DOWNLOAD_URL"
+          echo "gofile_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           
           # Print formatting directly to the step summary page
           echo "### 🚀 Repack Build Successful!" >> $GITHUB_STEP_SUMMARY
@@ -371,9 +373,34 @@ jobs:
 
     - name: Upload to Release (Optional)
       if: github.event.inputs.upload_to_release == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: build-${{ github.run_id }}
-        files: ${{ steps.package.outputs.tar_path }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        GOFILE_URL="${{ steps.upload-gofile.outputs.gofile_url }}"
+        BASE_MODEL="${{ github.event.inputs.base_model }}"
+        BASE_CSC="${{ github.event.inputs.base_csc }}"
+        PORT_MODE="${{ github.event.inputs.enable_oem_port }}"
+        PORT_TOOL="${{ github.event.inputs.porting_tool }}"
+        ROM_TYPE="${{ github.event.inputs.port_rom_type }}"
+
+        if [ "$PORT_MODE" = "true" ]; then
+          PORT_MODEL="${{ github.event.inputs.port_model }}"
+          TITLE="CSM Build - ${BASE_MODEL} → ${PORT_MODEL} (${ROM_TYPE})"
+          BODY="**Custom-Super-Maker Build**  
+        Base: \`${BASE_MODEL} (${BASE_CSC})\`  
+        Port: \`${PORT_MODEL}\` → \`${ROM_TYPE}\` via \`${PORT_TOOL}\`"
+        else
+          TITLE="CSM Build - ${BASE_MODEL} (${BASE_CSC}) - GSI"
+          BODY="**Custom-Super-Maker Build**  
+        Base: \`${BASE_MODEL} (${BASE_CSC})\`  
+        Mode: GSI Download"
+        fi
+
+        BODY="${BODY}
+
+        **GoFile Download:** [${GOFILE_URL}](${GOFILE_URL})"
+
+        gh release create "build-${{ github.run_id }}" \
+          --title "$TITLE" \
+          --notes "$BODY" \
+          --target "${{ github.sha }}"

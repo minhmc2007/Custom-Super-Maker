@@ -59,8 +59,9 @@ android-sdk-libsparse-utils, lz4, etc.).
 
 ## Output artifact attribution
 
-See LICENSE — any ROM built with these tools must credit
-`Custom-Super-Maker by Minhmc2077` in `build.prop` or docs.
+See LICENSE — **ROSRAL v1.1**. Any ROM built with these tools must:
+1. Credit `Custom-Super-Maker by Minhmc2077` in public posts/release notes
+2. Preserve the build.prop signature — must not delete/overwrite the core credit
 
 ## Third-party licenses
 

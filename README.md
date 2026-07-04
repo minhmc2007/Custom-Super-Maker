@@ -1,7 +1,7 @@
 # 🚀 Samsung Super-Repacker: Unbloat Your Budget Beast
 
 [![Status](https://img.shields.io/badge/STATUS-EXPERIMENTAL-orange?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/)
-[![License](https://img.shields.io/badge/LICENSE-GPL--v3-blue?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
+[![License](https://img.shields.io/badge/LICENSE-ROSRAL%20v1.1-red?style=for-the-badge)](LICENSE)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/asr_community)
 
 **Tired of your Samsung budget phone lagging like it's stuck in 2012?** 
@@ -94,28 +94,34 @@ Stuck on a step? Found a bug? Or just want to flex your benchmark scores?
 
 ## 📜 License
 
-**Dual-licensed under GNU GPL v3 + Additional Terms.**
+**RESTRICTED OPEN SOURCE & ROM ATTRIBUTION LICENSE (ROSRAL) v1.1**
 
-All original code in this repository is copyright (C) 2025-2026 Minhmc2077 and licensed under **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for the full text.
+Copyright (C) 2026 Duong Quang Minh (Minhmc2077). All Rights Reserved.
 
-This project incorporates code from several sources:
-- **QuantumROM**: GPL-3.0
-- **ErfanGSIs**: GPL-3.0 by Erfan Abdi
-- **repacksuper.sh**: Based on work by Uluruman (from XDA, original license unknown)
-- **Link2GSI**: Forked from RadGoodNow/YaEbuEbuGSITool (no explicit license)
+See the [LICENSE](LICENSE) file for the full text.
 
 ### Output Artifact Attribution
 
 If you publish or distribute any custom ROM, firmware, or `super.img` binary that was **built using this project's GitHub Actions workflows or scripts**, you **MUST** give appropriate credit to the author and this project.
 
-Include the following in your ROM's `build.prop` or accompanying documentation:
+The **build.prop signature is IMMUTABLE** — you must NOT delete, overwrite, or fully replace the core credit string. If you fork, the final property must preserve original authorship in a co-existence format:
 
 ```
 Built with Custom-Super-Maker by Minhmc2077
 https://github.com/minhmc2077/Custom-Super-Maker
 ```
 
-This project took over a year of development. Please respect that effort.
+Derivative fork format:
+
+```
+Built by [YourForkName], a fork of CSM by Minhmc2077
+```
+
+This project incorporates code from several sources:
+- **QuantumROM**: GPL-3.0
+- **ErfanGSIs**: GPL-3.0 by Erfan Abdi
+- **repacksuper.sh**: Based on work by Uluruman (from XDA, original license unknown)
+- **Link2GSI**: Forked from RadGoodNow/YaEbuEbuGSITool (no explicit license)
 
 ### ❗ Respect the Work
 

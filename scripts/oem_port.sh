@@ -211,8 +211,13 @@ UNLZEOF
     echo "==> Patching url2GSI.sh to add EROFS conversion..."
     sed -i '/\$TOOLS_DIR\/Firmware_extractor\/extractor.sh/a\ sudo bash '"$PWD"'/convert_erofs_to_ext4.sh "$PROJECT_DIR/working"' url2GSI.sh
 
-    echo "==> Running url2GSI.sh (stdout logged, stderr visible)..."
-    sudo ./url2GSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE" > "$WORK_DIR/url2gsi.log" 2>&1
+    echo "==> Running url2GSI.sh (output tee'd to log)..."
+    sudo ./url2GSI.sh "$FIRMWARE_ZIP" "$ROM_TYPE" 2>&1 | tee "$WORK_DIR/url2gsi.log"
+    ERFAN_EXIT="${PIPESTATUS[0]}"
+    if [ "$ERFAN_EXIT" -ne 0 ]; then
+        echo "::error::url2GSI.sh failed with exit code $ERFAN_EXIT. Log: $WORK_DIR/url2gsi.log"
+        exit "$ERFAN_EXIT"
+    fi
 
     echo "==> Locating ErfanGSIs output image..."
     IMG=$(find output out . -name "*GSI*.img" -o -name "*Aonly*.img" -o -name "*AB*.img" 2>/dev/null | head -n1)

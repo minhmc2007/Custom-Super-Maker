@@ -9,10 +9,10 @@ on:
         default: 'none'
         type: choice
         options:
-        - 'none (Use Custom URL below)'
-        - 'Samsung A04s (64GB)'
-        - 'Samsung A12s A127F'
-        - 'Samsung A15 (128/256GB)'
+          - 'none (Use Custom URL below)'
+          - 'Samsung A04s (64GB)'
+          - 'Samsung A12s A127F'
+          - 'Samsung A15 (128/256GB)'
       stock_firmware_url:
         description: 'Custom Stock Firmware URL (Required if preset is none)'
         required: false
@@ -53,171 +53,182 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Free disk space
-      uses: jlumbroso/free-disk-space@main
-      with:
-        tool-cache: true
-        android: true
-        dotnet: true
-        haskell: true
-        large-packages: true
-        swap-storage: true
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
-        pip install gdown
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sudo sh get-docker.sh
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
+          pip install gdown
+          curl -fsSL https://get-docker.com -o get-docker.sh
+          sudo sh get-docker.sh
 
-    - name: Verify and Prepare Script
-      run: |
-        if [ ! -f "./scripts/repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
-        chmod +x ./scripts/repacksuper.sh
-        mkdir -p work
+      - name: Verify and Prepare Script
+        run: |
+          if [ ! -f "./scripts/repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi
+          chmod +x ./scripts/repacksuper.sh
+          mkdir -p work
 
-    - name: Download Base Firmware
-      run: |
-        cd work
-        PRESET="${{ github.event.inputs.device_preset }}"
-        URL="${{ github.event.inputs.stock_firmware_url }}"
+      - name: Download Base Firmware
+        run: |
+          cd work
+          PRESET="${{ github.event.inputs.device_preset }}"
+          URL="${{ github.event.inputs.stock_firmware_url }}"
 
-        echo "==> Downloading Base Firmware..."
-        if [[ "$PRESET" == "Samsung A04s (64GB)" ]]; then
-          gdown --quiet --output stock_firmware.zip '1C9GtYTn1EZ4sQN7qfJeWN6gxDj_WbgY-'
-        elif [[ "$PRESET" == "Samsung A12s A127F" ]]; then
-          gdown --quiet --output stock_firmware.zip '1J38ATKSjoVN2yqVc_GF6JD9GKaPuhK2g'
-        elif [[ "$PRESET" == "Samsung A15 (128/256GB)" ]]; then
-          gdown --quiet --output stock_firmware.zip '12FoeBkPDHddj4lzd-T6pjHRQ8Ey3c2U8'
-        elif [ -n "$URL" ]; then
-          if [[ $URL == *"mega.nz"* ]]; then megadl -o stock_firmware.zip "$URL"; else wget -q --content-disposition -O stock_firmware.zip "$URL"; fi
-        else
-          echo "::error::No device preset or URL selected." && exit 1
-        fi
+          echo "==> Downloading Base Firmware..."
+          if [[ "$PRESET" == "Samsung A04s (64GB)" ]]; then
+            gdown --quiet --output stock_firmware.zip '1C9GtYTn1EZ4sQN7qfJeWN6gxDj_WbgY-'
+          elif [[ "$PRESET" == "Samsung A12s A127F" ]]; then
+            gdown --quiet --output stock_firmware.zip '1J38ATKSjoVN2yqVc_GF6JD9GKaPuhK2g'
+          elif [[ "$PRESET" == "Samsung A15 (128/256GB)" ]]; then
+            gdown --quiet --output stock_firmware.zip '12FoeBkPDHddj4lzd-T6pjHRQ8Ey3c2U8'
+          elif [ -n "$URL" ]; then
+            if [[ $URL == *"mega.nz"* ]]; then megadl -o stock_firmware.zip "$URL"; else wget -q --content-disposition -O stock_firmware.zip "$URL"; fi
+          else
+            echo "::error::No device preset or URL selected." && exit 1
+          fi
 
-        if [ ! -s "stock_firmware.zip" ]; then echo "✗ Error: Firmware download failed." && exit 1; fi
+          if [ ! -s "stock_firmware.zip" ]; then echo "✗ Error: Firmware download failed." && exit 1; fi
 
-        echo "==> Extracting AP file..."
-        AP_FILENAME=$(unzip -l "stock_firmware.zip" | grep -i -o -E "AP_.*\.tar\.md5" | head -n 1)
-        unzip -o -j "stock_firmware.zip" "$AP_FILENAME"
-        rm "stock_firmware.zip"
+          echo "==> Extracting AP file..."
+          AP_FILENAME=$(unzip -l "stock_firmware.zip" | grep -i -o -E "AP_.*\.tar\.md5" | head -n 1)
+          unzip -o -j "stock_firmware.zip" "$AP_FILENAME"
+          rm "stock_firmware.zip"
 
-        echo "==> Extracting super.img.lz4..."
-        tar -xvf "$AP_FILENAME" --wildcards '*super.img*.lz4'
-        rm "$AP_FILENAME"
+          echo "==> Extracting super.img.lz4..."
+          tar -xvf "$AP_FILENAME" --wildcards '*super.img*.lz4'
+          rm "$AP_FILENAME"
 
-        echo "==> Decompressing LZ4..."
-        SUPER_LZ4=$(ls *super.img*.lz4 | head -n 1)
-        lz4 -d "$SUPER_LZ4" stock_super_sparse.img
-        rm "$SUPER_LZ4"
+          echo "==> Decompressing LZ4..."
+          SUPER_LZ4=$(ls *super.img*.lz4 | head -n 1)
+          lz4 -d "$SUPER_LZ4" stock_super_sparse.img
+          rm "$SUPER_LZ4"
 
-    - name: Download and Extract Custom System
-      run: |
-        cd work
-        echo "==> Downloading Custom ROM..."
-        ROM_URL="${{ github.event.inputs.custom_system_url }}"
-        wget -O custom_rom_package "$ROM_URL"
+      - name: Download and Extract Custom System
+        run: |
+          cd work
+          echo "==> Downloading Custom ROM..."
+          ROM_URL="${{ github.event.inputs.custom_system_url }}"
+          wget -O custom_rom_package "$ROM_URL"
 
-        CLEAN_URL="${ROM_URL%%\?*}"
-        ROM_NAME=$(basename "$CLEAN_URL")
-        echo "Detected ROM Name: $ROM_NAME"
-        echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
+          CLEAN_URL="${ROM_URL%%\?*}"
+          ROM_NAME=$(basename "$CLEAN_URL")
+          echo "Detected ROM Name: $ROM_NAME"
+          echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
 
-        FILE_DESC=$(file -b custom_rom_package)
-        echo "Detected File Type: $FILE_DESC"
+          FILE_DESC=$(file -b custom_rom_package)
+          echo "Detected File Type: $FILE_DESC"
 
-        if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
-            mv custom_rom_package c.img.xz
-            unxz c.img.xz
-            mv c.img custom_system.img
+          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
+              mv custom_rom_package c.img.xz
+              unxz c.img.xz
+              mv c.img custom_system.img
 
-        elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
-            unzip -o custom_rom_package
+          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
+              unzip -o custom_rom_package
 
-        elif [[ "$FILE_DESC" == *"7-zip archive"* ]]; then
-            7z x custom_rom_package
+          elif [[ "$FILE_DESC" == *"7-zip archive"* ]]; then
+              7z x custom_rom_package
 
-        elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
-            mv custom_rom_package c.img.gz
-            gzip -d c.img.gz
-            mv c.img custom_system.img
+          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
+              mv custom_rom_package c.img.gz
+              gzip -d c.img.gz
+              mv c.img custom_system.img
 
-        else
-            echo "Assuming raw image..."
-            mv custom_rom_package custom_system.img
-        fi
+          else
+              echo "Assuming raw image..."
+              mv custom_rom_package custom_system.img
+          fi
 
-        if [ ! -f "custom_system.img" ]; then
-            echo "==> Searching for extracted .img file..."
-            IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
+          if [ ! -f "custom_system.img" ]; then
+              echo "==> Searching for extracted .img file..."
+              IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
 
-            if [ -z "$IMG_FILE" ]; then
-                echo "✗ Error: No .img file found after extraction!"
-                ls -R
-                exit 1
-            fi
+              if [ -z "$IMG_FILE" ]; then
+                  echo "✗ Error: No .img file found after extraction!"
+                  ls -R
+                  exit 1
+              fi
 
-            echo "==> Found image: $IMG_FILE"
-            mv "$IMG_FILE" custom_system.img
-        fi
+              echo "==> Found image: $IMG_FILE"
+              mv "$IMG_FILE" custom_system.img
+          fi
 
-        echo "==> Custom system image prepared: custom_system.img"
+          echo "==> Custom system image prepared: custom_system.img"
 
-    - name: Download ASRControl APK
-      run: |
-        cd work
-        echo "==> Downloading ASRControl APK..."
-        wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
+      - name: Download ASRControl APK
+        run: |
+          cd work
+          echo "==> Downloading ASRControl APK..."
+          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
 
-    - name: System Branding (APK, pfetch, build.prop)
-      run: |
-        cd work
-        if simg2img custom_system.img custom_system.raw 2>/dev/null; then
-          mv custom_system.raw custom_system.img
-        fi
-        chmod +x ../scripts/brand_system.sh
-        sudo ../scripts/brand_system.sh \
-          --image custom_system.img \
-          --apk ASRControl.apk \
-          --gsi-name "${{ env.ROM_NAME }}"
+      - name: System Branding (APK, pfetch, build.prop)
+        run: |
+          cd work
+          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
+            mv custom_system.raw custom_system.img
+          fi
 
-    - name: Run Repack
-      run: |
-        FLAGS="-r $(pwd)/work"
-        if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
-        if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
-        if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
-        if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
+          # Expand ext4 image size by 100MB to allow adding branding files and APKs
+          if file custom_system.img | grep -qi "ext"; then
+            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
+            truncate -s +100M custom_system.img
+            sudo e2fsck -f -y custom_system.img || true
+            sudo resize2fs custom_system.img
+          else
+            echo "==> custom_system.img is not an ext filesystem, skipping resize."
+          fi
 
-        echo "Running with flags: $FLAGS"
-        ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
+          chmod +x ../scripts/brand_system.sh
+          sudo ../scripts/brand_system.sh \
+            --image custom_system.img \
+            --apk ASRControl.apk \
+            --gsi-name "${{ env.ROM_NAME }}"
 
-    - name: Create Tarball
-      id: package
-      run: |
-        cd work
-        if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
-        mv repacked_super.img super.img
-        TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
-        tar -cvf "$TAR_NAME" super.img
-        echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
+      - name: Run Repack
+        run: |
+          FLAGS="-r $(pwd)/work"
+          if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
+          if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
+          if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
+          if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: repacked-super-image
-        path: ${{ steps.package.outputs.tar_path }}
-        retention-days: 7
+          echo "Running with flags: $FLAGS"
+          ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
 
-    - name: Upload Release
-      if: github.event.inputs.upload_to_release == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: build-${{ github.run_id }}
-        files: ${{ steps.package.outputs.tar_path }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Tarball
+        id: package
+        run: |
+          cd work
+          if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
+          mv repacked_super.img super.img
+          TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
+          tar -cvf "$TAR_NAME" super.img
+          echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repacked-super-image
+          path: ${{ steps.package.outputs.tar_path }}
+          retention-days: 7
+
+      - name: Upload Release
+        if: github.event.inputs.upload_to_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          files: ${{ steps.package.outputs.tar_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

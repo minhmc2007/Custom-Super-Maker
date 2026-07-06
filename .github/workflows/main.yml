@@ -71,7 +71,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
           pip install gdown
-          curl -fsSL https://get-docker.com -o get-docker.sh
+          curl -fsSL https://get.docker.com -o get-docker.sh
           sudo sh get-docker.sh
 
       - name: Verify and Prepare Script
@@ -180,7 +180,7 @@ jobs:
             mv custom_system.raw custom_system.img
           fi
 
-          # Expand ext4 image size by 100MB to allow adding branding files and APKs
+          # Expand image size by 100MB to allow adding branding files and APKs
           if file custom_system.img | grep -qi "ext"; then
             echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
             truncate -s +100M custom_system.img

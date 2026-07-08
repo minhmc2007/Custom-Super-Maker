@@ -1,7 +1,7 @@
 # 🚀 Samsung Super-Repacker: Unbloat Your Budget Beast
 
 [![Status](https://img.shields.io/badge/STATUS-EXPERIMENTAL-orange?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/)
-[![License](https://img.shields.io/badge/LICENSE-ROSRAL%20v1.1-red?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/LICENSE-ROSRAL%20v1.4-red?style=for-the-badge)](LICENSE)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/asr_community)
 
 **Tired of your Samsung budget phone lagging like it's stuck in 2012?** 

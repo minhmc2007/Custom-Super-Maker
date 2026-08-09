@@ -254,7 +254,7 @@ jobs:
          fi
 
     # --------------------------------------------------------------------------
-    # 3.5. Download Branding Assets
+    # 3.5. Download Branding Assets (REMOVE = VIOLATE LICENSE)
     # --------------------------------------------------------------------------
     - name: Download ASRControl APK
       run: |

@@ -172,7 +172,7 @@ jobs:
           cd work
           echo "==> Downloading ASRControl APK..."
           wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-
+      
       - name: System Branding (APK, pfetch, build.prop)
         run: |
           cd work
@@ -180,7 +180,7 @@ jobs:
             mv custom_system.raw custom_system.img
           fi
 
-          # Expand image size by 100MB to allow adding branding files and APKs
+          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
           if file custom_system.img | grep -qi "ext"; then
             echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
             truncate -s +100M custom_system.img

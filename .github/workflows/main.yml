@@ -69,7 +69,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
+          sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils lz4 unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
           pip install gdown
           curl -fsSL https://get.docker.com -o get-docker.sh
           sudo sh get-docker.sh

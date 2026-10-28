@@ -6,7 +6,7 @@ on:
       device_preset:
         description: 'Select Stock Firmware Source'
         required: true
-        default: 'none'
+        default: 'none (Use Custom URL below)'
         type: choice
         options:
           - 'none (Use Custom URL below)'
@@ -136,6 +136,34 @@ jobs:
             report_error "Samsung AP firmware archive is missing" "The ZIP is valid, but it does not contain an AP_*.tar.md5 file." "Use the full Samsung firmware ZIP, not an extracted file or a different package. The AP archive must contain super.img.lz4."
           fi
 
+          echo "==> Extracting AP file..."
+          unzip -o -j stock_firmware.zip "$AP_ENTRY" >/dev/null || report_error "Could not extract AP firmware" "The AP_*.tar.md5 archive could not be extracted from the firmware ZIP." "Download the complete Samsung firmware ZIP again and check that the link is not expired or restricted."
+          AP_FILENAME=$(basename "$AP_ENTRY")
+          if [ ! -s "$AP_FILENAME" ]; then
+            report_error "AP firmware file is missing" "The AP archive was listed in the ZIP but was not extracted." "Check the ZIP archive and provide a complete Samsung firmware download."
+          fi
+
+          if ! tar -tf "$AP_FILENAME" | grep -iE '(^|/)super\.img[^/]*\.lz4' >/dev/null; then
+            report_error "Super image is missing from AP firmware" "The AP archive does not contain a super.img LZ4 image." "Use a full, compatible Samsung firmware package that includes super.img.lz4."
+          fi
+
+          rm stock_firmware.zip
+          echo "==> Extracting super.img.lz4..."
+          tar -xf "$AP_FILENAME" --wildcards '*super.img*.lz4' || report_error "Could not extract super.img.lz4" "The super image could not be extracted from the AP archive." "Try downloading the firmware ZIP again and verify that the file is complete."
+          rm "$AP_FILENAME"
+
+          SUPER_LZ4=$(find . -maxdepth 1 -type f -name '*super.img*.lz4' -print -quit)
+          if [ -z "$SUPER_LZ4" ] || [ ! -s "$SUPER_LZ4" ]; then
+            report_error "Extracted super image is missing" "No non-empty super.img LZ4 file was produced from the AP archive." "Provide a complete Samsung firmware ZIP containing AP_*.tar.md5 with super.img.lz4 inside."
+          fi
+
+          echo "==> Decompressing LZ4..."
+          lz4 -d "$SUPER_LZ4" stock_super_sparse.img || report_error "Could not decompress super image" "The extracted super.img.lz4 file is invalid or incomplete." "Download the complete firmware ZIP again and check that it matches the target device."
+          rm "$SUPER_LZ4"
+          if [ ! -s "stock_super_sparse.img" ]; then
+            report_error "Stock super image is empty" "Decompression did not produce a usable stock super image." "Use a complete, uncorrupted Samsung firmware ZIP."
+          fi
+
       - name: Download and Extract Custom System
         env:
           ROM_URL: ${{ github.event.inputs.custom_system_url }}
@@ -239,7 +267,7 @@ jobs:
           cd work
           echo "==> Downloading ASRControl APK..."
           wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-      
+
       - name: System Branding (APK, pfetch, build.prop)
         run: |
           cd work
@@ -247,274 +275,7 @@ jobs:
             mv custom_system.raw custom_system.img
           fi
 
-          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
-          if file custom_system.img | grep -qi "ext"; then
-            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
-            truncate -s +100M custom_system.img
-            sudo e2fsck -f -y custom_system.img || true
-            sudo resize2fs custom_system.img
-          else
-            echo "==> custom_system.img is not an ext filesystem, skipping resize."
-          fi
-
-          chmod +x ../scripts/brand_system.sh
-          sudo ../scripts/brand_system.sh \
-            --image custom_system.img \
-            --apk ASRControl.apk \
-            --gsi-name "${{ env.ROM_NAME }}"
-
-      - name: Run Repack
-        run: |
-          FLAGS="-r $(pwd)/work"
-          if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
-          if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
-          if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
-          if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
-
-          echo "Running with flags: $FLAGS"
-          ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
-
-      - name: Create Tarball
-        id: package
-        run: |
-          cd work
-          if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
-          mv repacked_super.img super.img
-          TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
-          tar -cvf "$TAR_NAME" super.img
-          echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: repacked-super-image
-          path: ${{ steps.package.outputs.tar_path }}
-          retention-days: 7
-
-      - name: Upload Release
-        if: github.event.inputs.upload_to_release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          files: ${{ steps.package.outputs.tar_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
- | head -n 1 || true)
-          if [ -z "$AP_ENTRY" ]; then
-            report_error "Samsung AP firmware archive is missing" "The ZIP is valid, but it does not contain an AP_*.tar.md5 file." "Use the full Samsung firmware ZIP, not an extracted file or a different package. The AP archive must contain super.img.lz4."
-          fi
-
-          echo "==> Extracting AP file..."
-          unzip -o -j stock_firmware.zip "$AP_ENTRY" >/dev/null || report_error "Could not extract AP firmware" "The AP_*.tar.md5 archive could not be extracted from the firmware ZIP." "Download the complete Samsung firmware ZIP again and check that the link is not expired or restricted."
-          AP_FILENAME=$(basename "$AP_ENTRY")
-          if [ ! -s "$AP_FILENAME" ]; then
-            report_error "AP firmware file is missing" "The AP archive was listed in the ZIP but was not extracted." "Check the ZIP archive and provide a complete Samsung firmware download."
-          fi
-
-          if ! tar -tf "$AP_FILENAME" | grep -iE '(^|/)super\.img[^/]*\.lz4      - name: Download and Extract Custom System
-        run: |
-          cd work
-          echo "==> Downloading Custom ROM..."
-          ROM_URL="${{ github.event.inputs.custom_system_url }}"
-          wget -O custom_rom_package "$ROM_URL"
-
-          CLEAN_URL="${ROM_URL%%\?*}"
-          ROM_NAME=$(basename "$CLEAN_URL")
-          echo "Detected ROM Name: $ROM_NAME"
-          echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
-
-          FILE_DESC=$(file -b custom_rom_package)
-          echo "Detected File Type: $FILE_DESC"
-
-          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
-              mv custom_rom_package c.img.xz
-              unxz c.img.xz
-              mv c.img custom_system.img
-
-          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
-              unzip -o custom_rom_package
-
-          elif [[ "$FILE_DESC" == *"7-zip archive"* ]]; then
-              7z x custom_rom_package
-
-          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
-              mv custom_rom_package c.img.gz
-              gzip -d c.img.gz
-              mv c.img custom_system.img
-
-          else
-              echo "Assuming raw image..."
-              mv custom_rom_package custom_system.img
-          fi
-
-          if [ ! -f "custom_system.img" ]; then
-              echo "==> Searching for extracted .img file..."
-              IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
-
-              if [ -z "$IMG_FILE" ]; then
-                  echo "✗ Error: No .img file found after extraction!"
-                  ls -R
-                  exit 1
-              fi
-
-              echo "==> Found image: $IMG_FILE"
-              mv "$IMG_FILE" custom_system.img
-          fi
-
-          echo "==> Custom system image prepared: custom_system.img"
-
-      - name: Download ASRControl APK
-        run: |
-          cd work
-          echo "==> Downloading ASRControl APK..."
-          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-      
-      - name: System Branding (APK, pfetch, build.prop)
-        run: |
-          cd work
-          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
-            mv custom_system.raw custom_system.img
-          fi
-
-          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
-          if file custom_system.img | grep -qi "ext"; then
-            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
-            truncate -s +100M custom_system.img
-            sudo e2fsck -f -y custom_system.img || true
-            sudo resize2fs custom_system.img
-          else
-            echo "==> custom_system.img is not an ext filesystem, skipping resize."
-          fi
-
-          chmod +x ../scripts/brand_system.sh
-          sudo ../scripts/brand_system.sh \
-            --image custom_system.img \
-            --apk ASRControl.apk \
-            --gsi-name "${{ env.ROM_NAME }}"
-
-      - name: Run Repack
-        run: |
-          FLAGS="-r $(pwd)/work"
-          if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
-          if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
-          if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
-          if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
-
-          echo "Running with flags: $FLAGS"
-          ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
-
-      - name: Create Tarball
-        id: package
-        run: |
-          cd work
-          if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
-          mv repacked_super.img super.img
-          TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
-          tar -cvf "$TAR_NAME" super.img
-          echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: repacked-super-image
-          path: ${{ steps.package.outputs.tar_path }}
-          retention-days: 7
-
-      - name: Upload Release
-        if: github.event.inputs.upload_to_release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_id }}
-          files: ${{ steps.package.outputs.tar_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
- >/dev/null; then
-            report_error "Super image is missing from AP firmware" "The AP archive does not contain a super.img LZ4 image." "Use a full, compatible Samsung firmware package that includes super.img.lz4."
-          fi
-
-          rm stock_firmware.zip
-          echo "==> Extracting super.img.lz4..."
-          tar -xf "$AP_FILENAME" --wildcards '*super.img*.lz4' || report_error "Could not extract super.img.lz4" "The super image could not be extracted from the AP archive." "Try downloading the firmware ZIP again and verify that the file is complete."
-          rm "$AP_FILENAME"
-
-          SUPER_LZ4=$(find . -maxdepth 1 -type f -name '*super.img*.lz4' -print -quit)
-          if [ -z "$SUPER_LZ4" ] || [ ! -s "$SUPER_LZ4" ]; then
-            report_error "Extracted super image is missing" "No non-empty super.img LZ4 file was produced from the AP archive." "Provide a complete Samsung firmware ZIP containing AP_*.tar.md5 with super.img.lz4 inside."
-          fi
-
-          echo "==> Decompressing LZ4..."
-          lz4 -d "$SUPER_LZ4" stock_super_sparse.img || report_error "Could not decompress super image" "The extracted super.img.lz4 file is invalid or incomplete." "Download the complete firmware ZIP again and check that it matches the target device."
-          rm "$SUPER_LZ4"
-          if [ ! -s "stock_super_sparse.img" ]; then
-            report_error "Stock super image is empty" "Decompression did not produce a usable stock super image." "Use a complete, uncorrupted Samsung firmware ZIP."
-          fi
-
-      - name: Download and Extract Custom System
-        run: |
-          cd work
-          echo "==> Downloading Custom ROM..."
-          ROM_URL="${{ github.event.inputs.custom_system_url }}"
-          wget -O custom_rom_package "$ROM_URL"
-
-          CLEAN_URL="${ROM_URL%%\?*}"
-          ROM_NAME=$(basename "$CLEAN_URL")
-          echo "Detected ROM Name: $ROM_NAME"
-          echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
-
-          FILE_DESC=$(file -b custom_rom_package)
-          echo "Detected File Type: $FILE_DESC"
-
-          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
-              mv custom_rom_package c.img.xz
-              unxz c.img.xz
-              mv c.img custom_system.img
-
-          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
-              unzip -o custom_rom_package
-
-          elif [[ "$FILE_DESC" == *"7-zip archive"* ]]; then
-              7z x custom_rom_package
-
-          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
-              mv custom_rom_package c.img.gz
-              gzip -d c.img.gz
-              mv c.img custom_system.img
-
-          else
-              echo "Assuming raw image..."
-              mv custom_rom_package custom_system.img
-          fi
-
-          if [ ! -f "custom_system.img" ]; then
-              echo "==> Searching for extracted .img file..."
-              IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
-
-              if [ -z "$IMG_FILE" ]; then
-                  echo "✗ Error: No .img file found after extraction!"
-                  ls -R
-                  exit 1
-              fi
-
-              echo "==> Found image: $IMG_FILE"
-              mv "$IMG_FILE" custom_system.img
-          fi
-
-          echo "==> Custom system image prepared: custom_system.img"
-
-      - name: Download ASRControl APK
-        run: |
-          cd work
-          echo "==> Downloading ASRControl APK..."
-          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-      
-      - name: System Branding (APK, pfetch, build.prop)
-        run: |
-          cd work
-          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
-            mv custom_system.raw custom_system.img
-          fi
-
-          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
+          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project.
           if file custom_system.img | grep -qi "ext"; then
             echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
             truncate -s +100M custom_system.img

@@ -81,39 +81,373 @@ jobs:
           mkdir -p work
 
       - name: Download Base Firmware
+        env:
+          PRESET: ${{ github.event.inputs.device_preset }}
+          FIRMWARE_URL: ${{ github.event.inputs.stock_firmware_url }}
         run: |
           cd work
-          PRESET="${{ github.event.inputs.device_preset }}"
-          URL="${{ github.event.inputs.stock_firmware_url }}"
+          report_error() {
+            local title="$1"
+            local message="$2"
+            local help="$3"
+            echo "::error title=${title}::${message}"
+            {
+              printf '## ❌ %s\n\n%s\n\n' "$title" "$message"
+              printf '### How to fix\n\n%s\n\n' "$help"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
 
           echo "==> Downloading Base Firmware..."
           if [[ "$PRESET" == "Samsung A04s (64GB)" ]]; then
-            gdown --quiet --output stock_firmware.zip '1C9GtYTn1EZ4sQN7qfJeWN6gxDj_WbgY-'
+            gdown --quiet --output stock_firmware.zip '1C9GtYTn1EZ4sQN7qfJeWN6gxDj_WbgY-' || report_error "Preset firmware download failed" "Could not download the selected Samsung A04s firmware." "Rerun the workflow or select a custom direct-download URL for a public firmware ZIP."
           elif [[ "$PRESET" == "Samsung A12s A127F" ]]; then
-            gdown --quiet --output stock_firmware.zip '1J38ATKSjoVN2yqVc_GF6JD9GKaPuhK2g'
+            gdown --quiet --output stock_firmware.zip '1J38ATKSjoVN2yqVc_GF6JD9GKaPuhK2g' || report_error "Preset firmware download failed" "Could not download the selected Samsung A12s firmware." "Rerun the workflow or select a custom direct-download URL for a public firmware ZIP."
           elif [[ "$PRESET" == "Samsung A15 (128/256GB)" ]]; then
-            gdown --quiet --output stock_firmware.zip '12FoeBkPDHddj4lzd-T6pjHRQ8Ey3c2U8'
-          elif [ -n "$URL" ]; then
-            if [[ $URL == *"mega.nz"* ]]; then megadl -o stock_firmware.zip "$URL"; else wget -q --content-disposition -O stock_firmware.zip "$URL"; fi
+            gdown --quiet --output stock_firmware.zip '12FoeBkPDHddj4lzd-T6pjHRQ8Ey3c2U8' || report_error "Preset firmware download failed" "Could not download the selected Samsung A15 firmware." "Rerun the workflow or select a custom direct-download URL for a public firmware ZIP."
+          elif [ -n "$FIRMWARE_URL" ]; then
+            if [[ "$FIRMWARE_URL" == *"drive.google.com"* || "$FIRMWARE_URL" == *"docs.google.com"* ]]; then
+              if [[ "$FIRMWARE_URL" == *"/folders/"* ]]; then
+                report_error "Google Drive folder link is not supported" "The firmware input points to a Google Drive folder, not a single file." "Open the firmware ZIP in Drive and share the file itself with Anyone with the link, then paste that file-sharing URL."
+              fi
+              echo "==> Google Drive link detected. Downloading the shared file..."
+              gdown --quiet --output stock_firmware.zip "$FIRMWARE_URL" || report_error "Google Drive firmware download failed" "Could not download the Google Drive file. It may be a folder link, a restricted file, or an invalid share URL." "Share the firmware file with Anyone with the link and paste its file-sharing URL. Do not use a folder URL or a firmware webpage."
+            elif [[ "$FIRMWARE_URL" == *"mega.nz"* ]]; then
+              megadl -o stock_firmware.zip "$FIRMWARE_URL" || report_error "Firmware download failed" "MEGA did not provide a downloadable firmware file." "Use a working MEGA file link or a direct download URL to a Samsung firmware ZIP."
+            else
+              wget -q --content-disposition -O stock_firmware.zip "$FIRMWARE_URL" || report_error "Firmware download failed" "The URL could not be downloaded." "Use a direct download URL to a Samsung firmware ZIP. A webpage such as a SamFW firmware details page is not a download link."
+            fi
           else
-            echo "::error::No device preset or URL selected." && exit 1
+            report_error "Stock firmware URL is missing" "Choose a firmware preset or provide a custom firmware URL." "The custom URL must download a Samsung firmware ZIP. Google Drive file-sharing links are supported when the file is publicly accessible."
           fi
 
-          if [ ! -s "stock_firmware.zip" ]; then echo "✗ Error: Firmware download failed." && exit 1; fi
+          if [ ! -f "stock_firmware.zip" ] || [ ! -s "stock_firmware.zip" ]; then
+            report_error "Stock firmware download is missing or empty" "No firmware file was downloaded." "Check that the URL points to a real file and that the file is accessible without signing in."
+          fi
+
+          FIRMWARE_TYPE=$(file -b stock_firmware.zip)
+          echo "Detected firmware download type: $FIRMWARE_TYPE"
+          if ! unzip -tq stock_firmware.zip >/dev/null 2>&1; then
+            report_error "Stock firmware input is not a ZIP file" "The downloaded response is not a valid ZIP archive. It may be an HTML page, plain text, or a firmware information page." "Provide a direct link to the Samsung firmware ZIP itself, not a webpage like a SamFW model/version page. For Google Drive, use the share link for the actual file and allow access to Anyone with the link."
+          fi
+
+          AP_ENTRY=$(unzip -Z1 stock_firmware.zip | grep -iE '(^|/)AP_[^/]*\.tar\.md5$' | head -n 1 || true)
+          if [ -z "$AP_ENTRY" ]; then
+            report_error "Samsung AP firmware archive is missing" "The ZIP is valid, but it does not contain an AP_*.tar.md5 file." "Use the full Samsung firmware ZIP, not an extracted file or a different package. The AP archive must contain super.img.lz4."
+          fi
+
+      - name: Download and Extract Custom System
+        env:
+          ROM_URL: ${{ github.event.inputs.custom_system_url }}
+        run: |
+          cd work
+          report_error() {
+            local title="$1"
+            local message="$2"
+            local help="$3"
+            echo "::error title=${title}::${message}"
+            {
+              printf '## ❌ %s\n\n%s\n\n' "$title" "$message"
+              printf '### How to fix\n\n%s\n\n' "$help"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+
+          if [ -z "$ROM_URL" ]; then
+            report_error "Custom ROM URL is missing" "No custom ROM URL was provided." "Provide a direct download URL to a ROM image or supported archive. A Google Drive file-sharing link is also supported when the file is public."
+          fi
+          if [[ "$ROM_URL" == *"/folders/"* ]]; then
+            report_error "Google Drive folder link is not supported" "The ROM input points to a Google Drive folder, not a single file." "Open the ROM archive/image in Drive and share the file itself with Anyone with the link, then paste that file-sharing URL."
+          fi
+
+          CLEAN_URL="${ROM_URL%%\?*}"
+          if [[ "$ROM_URL" == *"drive.google.com"* || "$ROM_URL" == *"docs.google.com"* ]]; then
+            ROM_NAME="Google Drive ROM"
+          else
+            ROM_NAME=$(basename "$CLEAN_URL" | tr -cd '[:alnum:] ._()-')
+            [ -n "$ROM_NAME" ] || ROM_NAME="Custom ROM"
+          fi
+          echo "ROM_NAME=$ROM_NAME" >> "$GITHUB_ENV"
+
+          echo "==> Downloading Custom ROM..."
+          if [[ "$ROM_URL" == *"drive.google.com"* || "$ROM_URL" == *"docs.google.com"* ]]; then
+            echo "==> Google Drive link detected. Downloading the shared file..."
+            gdown --quiet --output custom_rom_package "$ROM_URL" || report_error "Google Drive ROM download failed" "Could not download the Google Drive file. It may be a folder link, a restricted file, or an invalid share URL." "Share the ROM file with Anyone with the link and paste its file-sharing URL. Do not use a folder URL or a ROM information webpage."
+          else
+            wget -q -O custom_rom_package "$ROM_URL" || report_error "Custom ROM download failed" "The URL could not be downloaded." "Use a direct download URL to the ROM image or archive, not a webpage that describes the ROM."
+          fi
+
+          if [ ! -f "custom_rom_package" ] || [ ! -s "custom_rom_package" ]; then
+            report_error "Custom ROM download is missing or empty" "No ROM file was downloaded." "Check that the URL points to a real file and that the file is accessible without signing in."
+          fi
+
+          FILE_DESC=$(file -b custom_rom_package)
+          FILE_MIME=$(file --mime-type -b custom_rom_package)
+          echo "Detected ROM file type: $FILE_DESC ($FILE_MIME)"
+          case "$FILE_MIME" in
+            text/*|application/json|application/xml|application/xhtml+xml|application/javascript)
+              report_error "Custom ROM URL returned text, not a ROM file" "The downloaded content is $FILE_MIME, so this is likely a webpage, an error message, or plain text rather than a ROM image/archive." "Use a direct download link to a supported ROM image or archive (.img, .img.xz, .img.gz, .zip, or .7z). Google Drive file links work when shared with Anyone with the link. Do not paste a ROM information page."
+              ;;
+          esac
+
+          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
+            xz -t custom_rom_package || report_error "Custom ROM XZ archive is corrupt" "The downloaded XZ file failed its integrity check." "Download the ROM archive again and check that the transfer completed."
+            mv custom_rom_package c.img.xz
+            unxz c.img.xz || report_error "Could not decompress custom ROM" "The XZ archive could not be decompressed." "Provide a complete .img.xz file or a supported ROM archive."
+            mv c.img custom_system.img || report_error "Custom system image was not produced" "The XZ file did not decompress into the expected image." "Provide a valid system.img.xz image."
+          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
+            unzip -tq custom_rom_package >/dev/null 2>&1 || report_error "Custom ROM ZIP is corrupt" "The downloaded ZIP archive failed its integrity check." "Download the ROM ZIP again and make sure it is a complete file."
+            unzip -o custom_rom_package || report_error "Could not extract custom ROM ZIP" "The ZIP archive could not be extracted." "Download the ROM ZIP again and verify that it is not damaged."
+          elif [[ "$FILE_DESC" == *"7-zip archive"* || "$FILE_DESC" == *"7z archive"* ]]; then
+            7z t custom_rom_package >/dev/null 2>&1 || report_error "Custom ROM 7z archive is corrupt" "The downloaded 7z archive failed its integrity check." "Download the ROM archive again and make sure it is a complete file."
+            7z x custom_rom_package || report_error "Could not extract custom ROM 7z archive" "The archive could not be extracted." "Download the ROM archive again and verify that it is not damaged."
+          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
+            gzip -t custom_rom_package || report_error "Custom ROM gzip archive is corrupt" "The downloaded gzip file failed its integrity check." "Download the ROM archive again and check that the transfer completed."
+            mv custom_rom_package c.img.gz
+            gzip -d c.img.gz || report_error "Could not decompress custom ROM" "The gzip archive could not be decompressed." "Provide a complete .img.gz file or a supported ROM archive."
+            mv c.img custom_system.img || report_error "Custom system image was not produced" "The gzip file did not decompress into the expected image." "Provide a valid system.img.gz image."
+          else
+            echo "Assuming raw image..."
+            mv custom_rom_package custom_system.img
+          fi
+
+          if [ ! -f "custom_system.img" ] || [ ! -s "custom_system.img" ]; then
+            echo "==> Searching for extracted .img file..."
+            IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
+            if [ -z "$IMG_FILE" ]; then
+              report_error "No system image found in custom ROM" "The download completed, but no usable .img file was found after extraction." "Use a ROM archive containing a system image, or provide a direct link to a supported image file."
+            fi
+            echo "==> Found image: $IMG_FILE"
+            mv "$IMG_FILE" custom_system.img || report_error "Could not prepare custom system image" "The extracted image could not be moved into place." "Download the ROM archive again and check its contents."
+          fi
+
+          if [ ! -f "custom_system.img" ] || [ ! -s "custom_system.img" ]; then
+            report_error "Custom system image is missing or empty" "The extracted custom_system.img file is empty or missing." "Provide a complete ROM image or archive."
+          fi
+
+          FINAL_DESC=$(file -b custom_system.img)
+          FINAL_MIME=$(file --mime-type -b custom_system.img)
+          case "$FINAL_MIME" in
+            text/*|application/json|application/xml|application/xhtml+xml|application/javascript)
+              report_error "Custom system image is text, not an image" "The extracted file is $FINAL_MIME. The ROM download or archive does not contain a valid binary system image." "Provide a real system image or a supported archive containing one. Do not use a ROM webpage or a text file renamed to .img."
+              ;;
+          esac
+          echo "==> Custom system image prepared: custom_system.img ($FINAL_DESC)"
+
+      - name: Download ASRControl APK
+        run: |
+          cd work
+          echo "==> Downloading ASRControl APK..."
+          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
+      
+      - name: System Branding (APK, pfetch, build.prop)
+        run: |
+          cd work
+          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
+            mv custom_system.raw custom_system.img
+          fi
+
+          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
+          if file custom_system.img | grep -qi "ext"; then
+            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
+            truncate -s +100M custom_system.img
+            sudo e2fsck -f -y custom_system.img || true
+            sudo resize2fs custom_system.img
+          else
+            echo "==> custom_system.img is not an ext filesystem, skipping resize."
+          fi
+
+          chmod +x ../scripts/brand_system.sh
+          sudo ../scripts/brand_system.sh \
+            --image custom_system.img \
+            --apk ASRControl.apk \
+            --gsi-name "${{ env.ROM_NAME }}"
+
+      - name: Run Repack
+        run: |
+          FLAGS="-r $(pwd)/work"
+          if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
+          if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
+          if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
+          if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
+
+          echo "Running with flags: $FLAGS"
+          ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
+
+      - name: Create Tarball
+        id: package
+        run: |
+          cd work
+          if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
+          mv repacked_super.img super.img
+          TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
+          tar -cvf "$TAR_NAME" super.img
+          echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repacked-super-image
+          path: ${{ steps.package.outputs.tar_path }}
+          retention-days: 7
+
+      - name: Upload Release
+        if: github.event.inputs.upload_to_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          files: ${{ steps.package.outputs.tar_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ | head -n 1 || true)
+          if [ -z "$AP_ENTRY" ]; then
+            report_error "Samsung AP firmware archive is missing" "The ZIP is valid, but it does not contain an AP_*.tar.md5 file." "Use the full Samsung firmware ZIP, not an extracted file or a different package. The AP archive must contain super.img.lz4."
+          fi
 
           echo "==> Extracting AP file..."
-          AP_FILENAME=$(unzip -l "stock_firmware.zip" | grep -i -o -E "AP_.*\.tar\.md5" | head -n 1)
-          unzip -o -j "stock_firmware.zip" "$AP_FILENAME"
-          rm "stock_firmware.zip"
+          unzip -o -j stock_firmware.zip "$AP_ENTRY" >/dev/null || report_error "Could not extract AP firmware" "The AP_*.tar.md5 archive could not be extracted from the firmware ZIP." "Download the complete Samsung firmware ZIP again and check that the link is not expired or restricted."
+          AP_FILENAME=$(basename "$AP_ENTRY")
+          if [ ! -s "$AP_FILENAME" ]; then
+            report_error "AP firmware file is missing" "The AP archive was listed in the ZIP but was not extracted." "Check the ZIP archive and provide a complete Samsung firmware download."
+          fi
 
+          if ! tar -tf "$AP_FILENAME" | grep -iE '(^|/)super\.img[^/]*\.lz4      - name: Download and Extract Custom System
+        run: |
+          cd work
+          echo "==> Downloading Custom ROM..."
+          ROM_URL="${{ github.event.inputs.custom_system_url }}"
+          wget -O custom_rom_package "$ROM_URL"
+
+          CLEAN_URL="${ROM_URL%%\?*}"
+          ROM_NAME=$(basename "$CLEAN_URL")
+          echo "Detected ROM Name: $ROM_NAME"
+          echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
+
+          FILE_DESC=$(file -b custom_rom_package)
+          echo "Detected File Type: $FILE_DESC"
+
+          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
+              mv custom_rom_package c.img.xz
+              unxz c.img.xz
+              mv c.img custom_system.img
+
+          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
+              unzip -o custom_rom_package
+
+          elif [[ "$FILE_DESC" == *"7-zip archive"* ]]; then
+              7z x custom_rom_package
+
+          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
+              mv custom_rom_package c.img.gz
+              gzip -d c.img.gz
+              mv c.img custom_system.img
+
+          else
+              echo "Assuming raw image..."
+              mv custom_rom_package custom_system.img
+          fi
+
+          if [ ! -f "custom_system.img" ]; then
+              echo "==> Searching for extracted .img file..."
+              IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
+
+              if [ -z "$IMG_FILE" ]; then
+                  echo "✗ Error: No .img file found after extraction!"
+                  ls -R
+                  exit 1
+              fi
+
+              echo "==> Found image: $IMG_FILE"
+              mv "$IMG_FILE" custom_system.img
+          fi
+
+          echo "==> Custom system image prepared: custom_system.img"
+
+      - name: Download ASRControl APK
+        run: |
+          cd work
+          echo "==> Downloading ASRControl APK..."
+          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
+      
+      - name: System Branding (APK, pfetch, build.prop)
+        run: |
+          cd work
+          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
+            mv custom_system.raw custom_system.img
+          fi
+
+          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project. 
+          if file custom_system.img | grep -qi "ext"; then
+            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
+            truncate -s +100M custom_system.img
+            sudo e2fsck -f -y custom_system.img || true
+            sudo resize2fs custom_system.img
+          else
+            echo "==> custom_system.img is not an ext filesystem, skipping resize."
+          fi
+
+          chmod +x ../scripts/brand_system.sh
+          sudo ../scripts/brand_system.sh \
+            --image custom_system.img \
+            --apk ASRControl.apk \
+            --gsi-name "${{ env.ROM_NAME }}"
+
+      - name: Run Repack
+        run: |
+          FLAGS="-r $(pwd)/work"
+          if [ "${{ github.event.inputs.silent_mode }}" == "true" ]; then FLAGS="$FLAGS -s"; fi
+          if [ "${{ github.event.inputs.empty_product }}" == "true" ]; then FLAGS="$FLAGS -e"; fi
+          if [ "${{ github.event.inputs.empty_system_ext }}" == "true" ]; then FLAGS="$FLAGS -x"; fi
+          if [ "${{ github.event.inputs.writable }}" == "true" ]; then FLAGS="$FLAGS -w"; fi
+
+          echo "Running with flags: $FLAGS"
+          ./scripts/repacksuper.sh $FLAGS work/stock_super_sparse.img work/custom_system.img work/repacked_super.img
+
+      - name: Create Tarball
+        id: package
+        run: |
+          cd work
+          if [ ! -f "repacked_super.img" ]; then echo "✗ Error: Repack failed, image not found." && exit 1; fi
+          mv repacked_super.img super.img
+          TAR_NAME="repacked_super_$(date +%Y%m%d).tar"
+          tar -cvf "$TAR_NAME" super.img
+          echo "tar_path=work/$TAR_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repacked-super-image
+          path: ${{ steps.package.outputs.tar_path }}
+          retention-days: 7
+
+      - name: Upload Release
+        if: github.event.inputs.upload_to_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_id }}
+          files: ${{ steps.package.outputs.tar_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ >/dev/null; then
+            report_error "Super image is missing from AP firmware" "The AP archive does not contain a super.img LZ4 image." "Use a full, compatible Samsung firmware package that includes super.img.lz4."
+          fi
+
+          rm stock_firmware.zip
           echo "==> Extracting super.img.lz4..."
-          tar -xvf "$AP_FILENAME" --wildcards '*super.img*.lz4'
+          tar -xf "$AP_FILENAME" --wildcards '*super.img*.lz4' || report_error "Could not extract super.img.lz4" "The super image could not be extracted from the AP archive." "Try downloading the firmware ZIP again and verify that the file is complete."
           rm "$AP_FILENAME"
 
+          SUPER_LZ4=$(find . -maxdepth 1 -type f -name '*super.img*.lz4' -print -quit)
+          if [ -z "$SUPER_LZ4" ] || [ ! -s "$SUPER_LZ4" ]; then
+            report_error "Extracted super image is missing" "No non-empty super.img LZ4 file was produced from the AP archive." "Provide a complete Samsung firmware ZIP containing AP_*.tar.md5 with super.img.lz4 inside."
+          fi
+
           echo "==> Decompressing LZ4..."
-          SUPER_LZ4=$(ls *super.img*.lz4 | head -n 1)
-          lz4 -d "$SUPER_LZ4" stock_super_sparse.img
+          lz4 -d "$SUPER_LZ4" stock_super_sparse.img || report_error "Could not decompress super image" "The extracted super.img.lz4 file is invalid or incomplete." "Download the complete firmware ZIP again and check that it matches the target device."
           rm "$SUPER_LZ4"
+          if [ ! -s "stock_super_sparse.img" ]; then
+            report_error "Stock super image is empty" "Decompression did not produce a usable stock super image." "Use a complete, uncorrupted Samsung firmware ZIP."
+          fi
 
       - name: Download and Extract Custom System
         run: |

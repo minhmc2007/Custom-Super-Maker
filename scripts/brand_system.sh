@@ -139,17 +139,20 @@ elif [ "$MODE" = "img" ]; then
         cleanup_ext4_mount() {
             local cleanup_failed=0
             local fuse_status=0
+            local unmounted=1
 
             if mountpoint -q "$mount_dir"; then
                 if ! umount "$mount_dir"; then
                     echo "Error: Could not unmount the branded ext4 image ($mount_backend)."
                     cleanup_failed=1
+                    unmounted=0
                 fi
             fi
 
-            # With -f, fuse2fs stays in the foreground. Wait for it after
-            # unmounting so a failed FUSE shutdown is not silently ignored.
-            if [ -n "$fuse_pid" ]; then
+            # With -f, fuse2fs stays in the foreground. Wait for it only
+            # after the mount is gone; otherwise a failed umount would hang
+            # this cleanup while the FUSE process waits for requests.
+            if [ -n "$fuse_pid" ] && [ "$unmounted" -eq 1 ]; then
                 if wait "$fuse_pid"; then
                     :
                 else

@@ -131,9 +131,36 @@ elif [ "$MODE" = "img" ]; then
     echo "==> Filesystem: $fs_type"
 
     if [ "$fs_type" = "ext4" ]; then
-        mount -o loop "$IMG_PATH" "$work_dir/mnt"
+        mount_backend=""
+
+        # Prefer the kernel ext4 driver. Some Android ext4 images use features
+        # that the runner's kernel cannot mount, even when e2fsck/resize2fs
+        # can read and resize them. Fall back to e2fsprogs' FUSE driver.
+        if mount -t ext4 -o loop,rw "$IMG_PATH" "$work_dir/mnt"; then
+            mount_backend="kernel"
+        elif command -v fuse2fs >/dev/null 2>&1; then
+            echo "==> Kernel ext4 mount failed; trying fuse2fs..."
+            if fuse2fs -o rw+ "$IMG_PATH" "$work_dir/mnt"; then
+                mount_backend="fuse2fs"
+            else
+                echo "Error: Both kernel ext4 and fuse2fs mounts failed."
+                dmesg | tail -n 40 || true
+                rm -rf "$work_dir"
+                exit 1
+            fi
+        else
+            echo "Error: ext4 mount failed and fuse2fs is not installed."
+            dmesg | tail -n 40 || true
+            rm -rf "$work_dir"
+            exit 1
+        fi
+
         inject_branding "$work_dir/mnt" "$APK_PATH" "$GSI_NAME"
-        umount "$work_dir/mnt"
+
+        if ! umount "$work_dir/mnt"; then
+            echo "Error: Could not unmount the branded ext4 image ($mount_backend)."
+            exit 1
+        fi
 
     elif [ "$fs_type" = "erofs" ]; then
         mkdir -p "$work_dir/extracted"

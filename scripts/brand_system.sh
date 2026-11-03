@@ -131,20 +131,72 @@ elif [ "$MODE" = "img" ]; then
     echo "==> Filesystem: $fs_type"
 
     if [ "$fs_type" = "ext4" ]; then
+        mount_dir="$work_dir/mnt"
         mount_backend=""
+        fuse_pid=""
+        fuse_log="$work_dir/fuse2fs.log"
 
-        # Prefer the kernel ext4 driver. Some Android ext4 images use features
-        # that the runner's kernel cannot mount, even when e2fsck/resize2fs
-        # can read and resize them. Fall back to e2fsprogs' FUSE driver.
-        if mount -t ext4 -o loop,rw "$IMG_PATH" "$work_dir/mnt"; then
+        cleanup_ext4_mount() {
+            local cleanup_failed=0
+            local fuse_status=0
+
+            if mountpoint -q "$mount_dir"; then
+                if ! umount "$mount_dir"; then
+                    echo "Error: Could not unmount the branded ext4 image ($mount_backend)."
+                    cleanup_failed=1
+                fi
+            fi
+
+            # With -f, fuse2fs stays in the foreground. Wait for it after
+            # unmounting so a failed FUSE shutdown is not silently ignored.
+            if [ -n "$fuse_pid" ]; then
+                if wait "$fuse_pid"; then
+                    :
+                else
+                    fuse_status=$?
+                    echo "Error: fuse2fs exited with status $fuse_status."
+                    cleanup_failed=1
+                fi
+            fi
+
+            return "$cleanup_failed"
+        }
+
+        # Prefer the kernel ext4 driver. If the runner kernel cannot mount
+        # this Android image, use e2fsprogs' FUSE driver.
+        if mount -t ext4 -o loop,rw "$IMG_PATH" "$mount_dir" && mountpoint -q "$mount_dir"; then
             mount_backend="kernel"
         elif command -v fuse2fs >/dev/null 2>&1; then
             echo "==> Kernel ext4 mount failed; trying fuse2fs..."
-            if fuse2fs -o rw+ "$IMG_PATH" "$work_dir/mnt"; then
-                mount_backend="fuse2fs"
-            else
-                echo "Error: Both kernel ext4 and fuse2fs mounts failed."
+
+            # fuse2fs accepts -o rw (and is read-write by default). The rw+
+            # option belongs to the fuse-ext2 compatibility wrapper, not
+            # fuse2fs. Keep it in the foreground so startup failure is
+            # observable instead of trusting a daemonizing parent process.
+            fuse2fs "$IMG_PATH" "$mount_dir" -o rw -f >"$fuse_log" 2>&1 &
+            fuse_pid=$!
+
+            for attempt in {1..100}; do
+                if mountpoint -q "$mount_dir"; then
+                    mount_backend="fuse2fs"
+                    break
+                fi
+                if ! kill -0 "$fuse_pid" 2>/dev/null; then
+                    break
+                fi
+                sleep 0.1
+            done
+
+            if [ "$mount_backend" != "fuse2fs" ]; then
+                echo "Error: fuse2fs did not mount the ext4 image."
+                if [ -s "$fuse_log" ]; then
+                    cat "$fuse_log"
+                fi
                 dmesg | tail -n 40 || true
+                if kill -0 "$fuse_pid" 2>/dev/null; then
+                    kill "$fuse_pid" 2>/dev/null || true
+                fi
+                wait "$fuse_pid" 2>/dev/null || true
                 rm -rf "$work_dir"
                 exit 1
             fi
@@ -155,10 +207,14 @@ elif [ "$MODE" = "img" ]; then
             exit 1
         fi
 
-        inject_branding "$work_dir/mnt" "$APK_PATH" "$GSI_NAME"
+        # Ensure failures during file injection still release the mount.
+        trap 'cleanup_ext4_mount' EXIT
+        inject_branding "$mount_dir" "$APK_PATH" "$GSI_NAME"
 
-        if ! umount "$work_dir/mnt"; then
-            echo "Error: Could not unmount the branded ext4 image ($mount_backend)."
+        if cleanup_ext4_mount; then
+            trap - EXIT
+        else
+            trap - EXIT
             exit 1
         fi
 

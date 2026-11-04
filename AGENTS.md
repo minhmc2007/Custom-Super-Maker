@@ -57,17 +57,13 @@ android-sdk-libsparse-utils, lz4, etc.).
    created in the ErfanGSIs dir and called after `extractor.sh` completes
    (via a `sed -i '/extractor.sh/a ...'` patch on `url2GSI.sh`).
 
-## Output artifact attribution
-
-See LICENSE — **ROSRAL v1.1**. Any ROM built with these tools must:
-1. Credit `Custom-Super-Maker by Minhmc2077` in public posts/release notes
-2. Preserve the build.prop signature — must not delete/overwrite the core credit
-
 ## Third-party licenses
+
+The MIT license applies to project-authored code. Third-party components retain their respective licenses.
 
 | Component | License |
 |---|---|
-| This project's code | GPL-3.0 + additional terms |
+| This project's code | MIT |
 | QuantumROM | GPL-3.0 |
 | ErfanGSIs | GPL-3.0 |
 | Link2GSI | Unlicensed (All Rights Reserved) |

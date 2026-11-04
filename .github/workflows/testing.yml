@@ -124,7 +124,7 @@ jobs:
         sudo apt-get install -y -qq unace unrar zip p7zip-full sharutils rar uudeview mpack arj cabextract rename liblzma-dev brotli lz4 protobuf-compiler git gawk python3-pip
         
         # Python Libs & Samloader
-        pip3 install -q gdown backports.lzma protobuf twrpdtgen extract-dtb pycryptodome --break-system-packages
+        pip3 install -q gdown protobuf twrpdtgen extract-dtb pycryptodome --break-system-packages
         pip3 install git+https://github.com/SN-Abdullah-Al-Noman/samloader.git --break-system-packages
 
     - name: Prepare Workspace & Script

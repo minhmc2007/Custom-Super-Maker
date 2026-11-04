@@ -1,13 +1,7 @@
+name: Legacy Workflow
 
-# A descriptive name for the workflow, shown in the GitHub Actions UI.
-name: Please use Android...Repack (Build & Release) instead
-
-# This section defines how the workflow is triggered.
 on:
-  # 'workflow_dispatch' allows you to run this workflow manually from the
-  # "Actions" tab in your GitHub repository.
   workflow_dispatch:
-    # 'inputs' defines the parameters you can provide when running the workflow manually.
     inputs:
       stock_firmware_url:
         description: 'URL to the stock firmware (Direct HTTP, MEGA.nz, etc.).'
@@ -47,18 +41,14 @@ on:
         type: boolean
         default: true
 
-# A workflow is made up of one or more 'jobs'. This job is named 'repack-super'.
 jobs:
   repack-super:
-    # We use a larger runner to avoid "No space left on device" errors, but your cleanup scripts are essential.
     runs-on: ubuntu-latest
 
-    # 'steps' are a sequence of tasks that will be executed as part of the job.
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # --- START OF DISK SPACE CLEANUP (Your excellent addition) ---
     - name: Free disk space (1/3) - Manual Cleanup
       run: |
         echo "Initial disk space:"
@@ -75,13 +65,12 @@ jobs:
       uses: rokibhasansagar/slimhub_actions@main
       with:
         retain: '' 
-    # --- END OF DISK SPACE CLEANUP ---
 
     - name: Install Dependencies
       run: |
         sudo apt-get update
         # Install only what's needed for building. Heimdall is NOT required.
-        sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils liblz4-tool unzip gzip p7zip-full file wget curl megatools
+        sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils lz4 unzip gzip p7zip-full file wget curl megatools
     - name: Verify and Prepare Script
       run: |
         if [ ! -f "./scripts/repacksuper.sh" ]; then echo "✗ Error: repacksuper.sh not found" && exit 1; fi

@@ -121,7 +121,7 @@ jobs:
         # Android & Filesystem Tools
         sudo apt-get install -y -qq android-sdk-libsparse-utils tar xz-utils lz4 unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils cpio rsync jq
         # Porting Support Tools
-        sudo apt-get install -y -qq unace unrar zip p7zip-rar sharutils rar uudeview mpack arj cabextract rename liblzma-dev brotli lz4 protobuf-compiler git gawk python3-pip
+        sudo apt-get install -y -qq unace unrar zip p7zip-full sharutils rar uudeview mpack arj cabextract rename liblzma-dev brotli lz4 protobuf-compiler git gawk python3-pip
         
         # Python Libs & Samloader
         pip3 install -q gdown backports.lzma protobuf twrpdtgen extract-dtb pycryptodome --break-system-packages

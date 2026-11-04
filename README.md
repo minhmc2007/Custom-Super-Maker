@@ -5,7 +5,7 @@
 > When you use a Google Drive link, the tool ends up downloading a useless verification HTML page instead of the actual image file, causing the build to immediately fail. Read the instructions, use a direct download link, and stop breaking your own builds!
 
 [![Status](https://img.shields.io/badge/STATUS-EXPERIMENTAL-orange?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/)
-[![License](https://img.shields.io/badge/LICENSE-ROSRAL%20v1.4-red?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Telegram](https://img.shields.io/badge/Telegram-Join%20Chat-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/asr_community)
 
 **Tired of your budget Samsung phone lagging like it's stuck in 2012?** 
@@ -35,7 +35,6 @@ Most budget Samsung devices do not have official TWRP builds. Without TWRP, flas
 - ✅ **Cloud Powered**: Runs 100% on GitHub Actions—saving your own CPU and RAM.
 - ✅ **Universal Input**: Accepts `.img`, `.img.xz`, `.img.gz`, or `.zip`.
 - ✅ **Smart Caching**: Stock firmware is cached to make subsequent builds significantly faster.
-- ✅ **Branded & Optimized**: Automatically adds `Built.By.Minh2077.Script` to your `build.prop`.
 
 ---
 
@@ -98,14 +97,6 @@ Stuck on a step? Found a bug? Or just want to share your benchmark scores?
 
 ## 📜 License
 
-**RESTRICTED OPEN SOURCE & ROM ATTRIBUTION LICENSE (ROSRAL) v1.1**
+This project is licensed under the [MIT License](LICENSE).
 
-Copyright (C) 2026 Duong Quang Minh (Minhmc2077). All Rights Reserved.
-
-See the [LICENSE](LICENSE) file for the full text.
-
-### Output Artifact Attribution
-
-If you publish or distribute any custom ROM, firmware, or `super.img` binary that was **built using this project's GitHub Actions workflows or scripts**, you **MUST** give appropriate credit to the author and this project.
-
-The **build.prop signature is IMMUTABLE** — you must NOT delete, overwrite, or fully replace the core credit string. If you fork, the final property must preserve the original authorship in a co-existence format:
+The MIT License applies to project-authored code in this repository. Third-party components and bundled tools retain their respective licenses.

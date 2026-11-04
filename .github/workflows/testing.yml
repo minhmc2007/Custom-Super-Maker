@@ -230,10 +230,6 @@ jobs:
         URL="${{ github.event.inputs.custom_system_url }}"
         if [ -z "$URL" ]; then echo "::error::Custom System URL is required." && exit 1; fi
 
-        CLEAN_URL="${URL%%\?*}"
-        ROM_NAME=$(basename "$CLEAN_URL")
-        echo "ROM_NAME=$ROM_NAME" >> $GITHUB_ENV
-        
         cd work
         wget -q -O rom_package "$URL"
         
@@ -254,14 +250,7 @@ jobs:
          fi
 
     # --------------------------------------------------------------------------
-    # 3.5. Download Branding Assets (REMOVE = VIOLATE LICENSE)
-    # --------------------------------------------------------------------------
-    - name: Download ASRControl APK
-      run: |
-        wget -q -O work/ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-
-    # --------------------------------------------------------------------------
-    # 3.6. EROFS System Image Compression (Safe Mode)
+    # 3.5. EROFS System Image Compression (Safe Mode)
     # --------------------------------------------------------------------------
     - name: Compress System Image (EROFS)
       if: github.event.inputs.enable_erofs_compression == 'true'

@@ -69,7 +69,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils lz4 unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip fuse2fs
+          sudo apt-get install -y android-sdk-libsparse-utils tar xz-utils lz4 unzip p7zip-full file wget curl megatools f2fs-tools erofs-utils python3-pip
           pip install gdown
           curl -fsSL https://get.docker.com -o get-docker.sh
           sudo sh get-docker.sh
@@ -187,109 +187,6 @@ jobs:
           if [[ "$ROM_URL" == *"/folders/"* ]]; then
             report_error "Google Drive folder link is not supported" "The ROM input points to a Google Drive folder, not a single file." "Open the ROM archive/image in Drive and share the file itself with Anyone with the link, then paste that file-sharing URL."
           fi
-
-          CLEAN_URL="${ROM_URL%%\?*}"
-          if [[ "$ROM_URL" == *"drive.google.com"* || "$ROM_URL" == *"docs.google.com"* ]]; then
-            ROM_NAME="Google Drive ROM"
-          else
-            ROM_NAME=$(basename "$CLEAN_URL" | tr -cd '[:alnum:] ._()-')
-            [ -n "$ROM_NAME" ] || ROM_NAME="Custom ROM"
-          fi
-          echo "ROM_NAME=$ROM_NAME" >> "$GITHUB_ENV"
-
-          echo "==> Downloading Custom ROM..."
-          if [[ "$ROM_URL" == *"drive.google.com"* || "$ROM_URL" == *"docs.google.com"* ]]; then
-            echo "==> Google Drive link detected. Downloading the shared file..."
-            gdown --quiet --output custom_rom_package "$ROM_URL" || report_error "Google Drive ROM download failed" "Could not download the Google Drive file. It may be a folder link, a restricted file, or an invalid share URL." "Share the ROM file with Anyone with the link and paste its file-sharing URL. Do not use a folder URL or a ROM information webpage."
-          else
-            wget -q -O custom_rom_package "$ROM_URL" || report_error "Custom ROM download failed" "The URL could not be downloaded." "Use a direct download URL to the ROM image or archive, not a webpage that describes the ROM."
-          fi
-
-          if [ ! -f "custom_rom_package" ] || [ ! -s "custom_rom_package" ]; then
-            report_error "Custom ROM download is missing or empty" "No ROM file was downloaded." "Check that the URL points to a real file and that the file is accessible without signing in."
-          fi
-
-          FILE_DESC=$(file -b custom_rom_package)
-          FILE_MIME=$(file --mime-type -b custom_rom_package)
-          echo "Detected ROM file type: $FILE_DESC ($FILE_MIME)"
-          case "$FILE_MIME" in
-            text/*|application/json|application/xml|application/xhtml+xml|application/javascript)
-              report_error "Custom ROM URL returned text, not a ROM file" "The downloaded content is $FILE_MIME, so this is likely a webpage, an error message, or plain text rather than a ROM image/archive." "Use a direct download link to a supported ROM image or archive (.img, .img.xz, .img.gz, .zip, or .7z). Google Drive file links work when shared with Anyone with the link. Do not paste a ROM information page."
-              ;;
-          esac
-
-          if [[ "$FILE_DESC" == *"XZ compressed"* ]]; then
-            xz -t custom_rom_package || report_error "Custom ROM XZ archive is corrupt" "The downloaded XZ file failed its integrity check." "Download the ROM archive again and check that the transfer completed."
-            mv custom_rom_package c.img.xz
-            unxz c.img.xz || report_error "Could not decompress custom ROM" "The XZ archive could not be decompressed." "Provide a complete .img.xz file or a supported ROM archive."
-            mv c.img custom_system.img || report_error "Custom system image was not produced" "The XZ file did not decompress into the expected image." "Provide a valid system.img.xz image."
-          elif [[ "$FILE_DESC" == *"Zip archive"* ]]; then
-            unzip -tq custom_rom_package >/dev/null 2>&1 || report_error "Custom ROM ZIP is corrupt" "The downloaded ZIP archive failed its integrity check." "Download the ROM ZIP again and make sure it is a complete file."
-            unzip -o custom_rom_package || report_error "Could not extract custom ROM ZIP" "The ZIP archive could not be extracted." "Download the ROM ZIP again and verify that it is not damaged."
-          elif [[ "$FILE_DESC" == *"7-zip archive"* || "$FILE_DESC" == *"7z archive"* ]]; then
-            7z t custom_rom_package >/dev/null 2>&1 || report_error "Custom ROM 7z archive is corrupt" "The downloaded 7z archive failed its integrity check." "Download the ROM archive again and make sure it is a complete file."
-            7z x custom_rom_package || report_error "Could not extract custom ROM 7z archive" "The archive could not be extracted." "Download the ROM archive again and verify that it is not damaged."
-          elif [[ "$FILE_DESC" == *"gzip compressed"* ]]; then
-            gzip -t custom_rom_package || report_error "Custom ROM gzip archive is corrupt" "The downloaded gzip file failed its integrity check." "Download the ROM archive again and check that the transfer completed."
-            mv custom_rom_package c.img.gz
-            gzip -d c.img.gz || report_error "Could not decompress custom ROM" "The gzip archive could not be decompressed." "Provide a complete .img.gz file or a supported ROM archive."
-            mv c.img custom_system.img || report_error "Custom system image was not produced" "The gzip file did not decompress into the expected image." "Provide a valid system.img.gz image."
-          else
-            echo "Assuming raw image..."
-            mv custom_rom_package custom_system.img
-          fi
-
-          if [ ! -f "custom_system.img" ] || [ ! -s "custom_system.img" ]; then
-            echo "==> Searching for extracted .img file..."
-            IMG_FILE=$(find . -type f -name "*.img" ! -name "stock_super_sparse.img" -printf "%s\t%p\n" | sort -n | tail -1 | cut -f2-)
-            if [ -z "$IMG_FILE" ]; then
-              report_error "No system image found in custom ROM" "The download completed, but no usable .img file was found after extraction." "Use a ROM archive containing a system image, or provide a direct link to a supported image file."
-            fi
-            echo "==> Found image: $IMG_FILE"
-            mv "$IMG_FILE" custom_system.img || report_error "Could not prepare custom system image" "The extracted image could not be moved into place." "Download the ROM archive again and check its contents."
-          fi
-
-          if [ ! -f "custom_system.img" ] || [ ! -s "custom_system.img" ]; then
-            report_error "Custom system image is missing or empty" "The extracted custom_system.img file is empty or missing." "Provide a complete ROM image or archive."
-          fi
-
-          FINAL_DESC=$(file -b custom_system.img)
-          FINAL_MIME=$(file --mime-type -b custom_system.img)
-          case "$FINAL_MIME" in
-            text/*|application/json|application/xml|application/xhtml+xml|application/javascript)
-              report_error "Custom system image is text, not an image" "The extracted file is $FINAL_MIME. The ROM download or archive does not contain a valid binary system image." "Provide a real system image or a supported archive containing one. Do not use a ROM webpage or a text file renamed to .img."
-              ;;
-          esac
-          echo "==> Custom system image prepared: custom_system.img ($FINAL_DESC)"
-
-      - name: Download ASRControl APK
-        run: |
-          cd work
-          echo "==> Downloading ASRControl APK..."
-          wget -q -O ASRControl.apk "https://github.com/minhmc2007/minhmc2007/releases/download/v0.0.1/app-debug.apk" || echo "Warning: APK download failed."
-
-      - name: System Branding (APK, pfetch, build.prop)
-        run: |
-          cd work
-          if simg2img custom_system.img custom_system.raw 2>/dev/null; then
-            mv custom_system.raw custom_system.img
-          fi
-
-          # Expand image size by 100MB to allow adding branding files and APKs; DO NOT REMOVE THIS, or you will violate the project's license, iif this section not work well for your firmware, you can remove it BUT YOU MUST CREDIT ME (Minhmc2077) as the author of this project.
-          if file custom_system.img | grep -qi "ext"; then
-            echo "==> Detected ext filesystem. Expanding custom_system.img by 100MB..."
-            truncate -s +100M custom_system.img
-            sudo e2fsck -f -y custom_system.img || true
-            sudo resize2fs custom_system.img
-          else
-            echo "==> custom_system.img is not an ext filesystem, skipping resize."
-          fi
-
-          chmod +x ../scripts/brand_system.sh
-          sudo ../scripts/brand_system.sh \
-            --image custom_system.img \
-            --apk ASRControl.apk \
-            --gsi-name "${{ env.ROM_NAME }}"
 
       - name: Run Repack
         run: |
